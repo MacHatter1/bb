@@ -49,6 +49,16 @@ describe("CompactSecondaryPanelShelf", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it("hides the closed shelf so it cannot cover the sidebar shelf", () => {
+    renderShelf(false);
+
+    const shelf = screen.getByTestId("secondary-panel-shelf");
+    expect(shelf.className).toContain("data-[state=closed]:invisible");
+    expect(shelf.className).toContain(
+      "data-[state=closed]:[transition:visibility_0s_linear_220ms]",
+    );
+  });
+
   it("marks the shelf inert while closed and interactive while open", () => {
     const { rerender } = renderShelf(false);
     expect(
