@@ -64,6 +64,7 @@ interface SecondaryPanelLayoutProps {
   renderPanel: (args: SecondaryPanelRenderArgs) => ReactNode;
   renderHostedPanel?: (panel: ReactNode) => ReactNode;
   composerHost: PluginComposerHost | null;
+  compactPresentation: "shelf" | "full";
 }
 
 export function SecondaryPanelLayout({
@@ -82,6 +83,7 @@ export function SecondaryPanelLayout({
   renderPanel,
   renderHostedPanel,
   composerHost,
+  compactPresentation,
 }: SecondaryPanelLayoutProps) {
   const paneContext = useOptionalPaneContext();
   const secondaryPanelHost = paneContext?.secondaryPanelHost ?? null;
@@ -346,6 +348,7 @@ export function SecondaryPanelLayout({
         <CompactSecondaryPanelShelf
           open={open}
           onClose={onClose}
+          presentation={compactPresentation}
           srLabel={drawerLabel}
           onContentAnimationEnd={handleDrawerContentAnimationEnd}
         >

@@ -16,7 +16,7 @@ import {
 } from "@bb/shared-ui/tooltip";
 import { setCompactSidebarDrawerShowing } from "./sidebar-mobile-drawer-visibility.js";
 import {
-  isCompactSecondaryPanelShelfShowing,
+  getCompactSecondaryPanelPresentation,
   subscribeCompactSecondaryPanelShelfShowing,
 } from "./secondary-panel-shelf-visibility.js";
 
@@ -1891,10 +1891,10 @@ const SidebarInset = React.forwardRef<
     }
   }, [clearSwipeSession, isCompactViewport, openMobile]);
 
-  const secondaryPanelShelfShowing = React.useSyncExternalStore(
+  const secondaryPanelPresentation = React.useSyncExternalStore(
     subscribeCompactSecondaryPanelShelfShowing,
-    isCompactSecondaryPanelShelfShowing,
-    () => false,
+    getCompactSecondaryPanelPresentation,
+    () => "closed" as const,
   );
   const shelfState = isCompactViewport
     ? openMobile
@@ -1903,9 +1903,7 @@ const SidebarInset = React.forwardRef<
     : undefined;
   const panelShelfState =
     isCompactViewport && !openMobile
-      ? secondaryPanelShelfShowing
-        ? "open"
-        : "closed"
+      ? secondaryPanelPresentation
       : undefined;
 
   return (
@@ -1923,7 +1921,8 @@ const SidebarInset = React.forwardRef<
         "relative flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background max-md:z-30",
         SIDEBAR_MOBILE_SHELF_INSET_TRANSITION_CLASS,
         "data-[sidebar-shelf=open]:translate-x-(--sidebar-width-mobile) data-[sidebar-shelf=open]:rounded-l-xl data-[sidebar-shelf=open]:shadow-xl data-[sidebar-shelf]:will-change-[translate]",
-        "data-[panel-shelf=open]:-translate-x-(--secondary-panel-width-mobile) data-[panel-shelf=open]:rounded-r-xl data-[panel-shelf=open]:shadow-xl data-[panel-shelf]:will-change-[translate]",
+        "data-[panel-shelf=shelf]:-translate-x-(--secondary-panel-width-mobile) data-[panel-shelf=shelf]:rounded-r-xl data-[panel-shelf=shelf]:shadow-xl data-[panel-shelf]:will-change-[translate]",
+        "data-[panel-shelf=full]:-translate-x-full",
         "md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow",
         className,
       )}
