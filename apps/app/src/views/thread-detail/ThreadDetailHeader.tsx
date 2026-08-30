@@ -12,7 +12,6 @@ import { useAtomValue } from "jotai";
 import { COARSE_POINTER_TOOLBAR_ACTION_BUTTON_CLASS } from "@bb/shared-ui/coarse-pointer-sizing";
 import { Icon } from "@bb/shared-ui/icon";
 import { Pill } from "@bb/shared-ui/pill";
-import { useIsCompactViewport } from "@bb/shared-ui/hooks/use-compact-viewport";
 import { SplitButton } from "@/components/ui/split-button.js";
 import {
   AppPageHeader,
@@ -89,7 +88,6 @@ export function ThreadDetailHeader({
     resetKey: threadId,
     title: threadTitle,
   });
-  const renderAsDrawer = useIsCompactViewport();
   const [desktopInfo] = useState(getBbDesktopInfo);
   const dimsInactiveSplits = useAtomValue(dimInactiveSplitsAtom);
   const panelShortcut = useAppCommandShortcut("panel.toggle");
