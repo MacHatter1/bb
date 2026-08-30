@@ -411,6 +411,23 @@ describe("mobile sidebar shelf stacking", () => {
     expect(getMobilePanel()?.style.translate).toBe("");
   });
 
+  it("lifts the revealed page on the shelf-facing edge for both shelves", () => {
+    vi.useFakeTimers();
+    renderCompactSidebarHarness();
+    settleMobileRealization();
+
+    const inset = document.querySelector('[data-sidebar="inset"]');
+    if (!(inset instanceof HTMLElement)) {
+      throw new Error("Expected a page inset");
+    }
+
+    expect(inset.className).toContain("data-[sidebar-shelf=open]:rounded-l-xl");
+    expect(inset.className).toContain("data-[panel-shelf=open]:rounded-r-xl");
+    expect(inset.className).toContain("data-[sidebar-shelf=open]:shadow-xl");
+    expect(inset.className).toContain("data-[panel-shelf=open]:shadow-xl");
+    expect(inset.className).not.toContain("shadow-2xl");
+  });
+
   it("leaves the page untouched by the shelf on desktop", () => {
     render(
       <CompactViewportOverrideProvider isCompactViewport={false}>
