@@ -104,7 +104,9 @@ export function InstalledPluginRow({
   const runtimeStatusToneClass =
     runtimeStatus?.tone === "error"
       ? "text-destructive-text"
-      : "text-warning-text";
+      : runtimeStatus?.tone === "warning"
+        ? "text-warning-text"
+        : "text-muted-foreground";
 
   const openDetail = () =>
     navigate(

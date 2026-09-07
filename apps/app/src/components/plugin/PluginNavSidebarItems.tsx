@@ -22,6 +22,8 @@ import {
 import { Button } from "@bb/shared-ui/button";
 import { Checkbox } from "@bb/shared-ui/checkbox";
 import { Icon } from "@bb/shared-ui/icon";
+import { Skeleton } from "@bb/shared-ui/skeleton";
+import { usePluginFrontendsSettled } from "@/lib/plugin-frontend-boot-state";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -137,6 +139,7 @@ export function PluginNavSidebarItems(props: {
   onNavigate?: () => void;
   splitEnabled?: boolean;
 }) {
+  const pluginsLoading = !usePluginFrontendsSettled();
   const discoveredEntries = usePluginNavPanelChrome();
   const entries = props.entries ?? discoveredEntries;
   const rows = useMemo<SidebarNavRow[]>(
@@ -163,9 +166,10 @@ export function PluginNavSidebarItems(props: {
       (props.builtInEntries ?? []).map(getPluginNavPanelKey),
     [props.builtInEntries, props.leadingOrderKeys],
   );
-  if (rows.length === 0) return null;
+  if (rows.length === 0 && !pluginsLoading) return null;
   return (
     <PluginNavSidebarItemList
+      pluginsLoading={pluginsLoading}
       rows={rows}
       leadingOrderKeys={leadingOrderKeys}
       splitEnabled={props.splitEnabled ?? false}
@@ -183,6 +187,7 @@ export function PluginNavSidebarItems(props: {
 }
 
 function PluginNavSidebarItemList({
+  pluginsLoading,
   compactCustomizeMode,
   leadingOrderKeys,
   onCompactCustomizeModeChange,
@@ -190,6 +195,7 @@ function PluginNavSidebarItemList({
   rows,
   splitEnabled = false,
 }: {
+  pluginsLoading: boolean;
   compactCustomizeMode?: boolean;
   leadingOrderKeys: readonly string[];
   onCompactCustomizeModeChange?: (isCustomizing: boolean) => void;
@@ -459,6 +465,36 @@ function PluginNavSidebarItemList({
           )}
         </SortableContext>
       </DndContext>
+      {pluginsLoading ? (
+        <div role="status" aria-label="Loading plugins" className="space-y-0.5">
+          {rows.every((row) => !isPluginSidebarNavRow(row)) ? (
+            <div
+              aria-hidden="true"
+              data-testid="plugin-nav-loading-placeholders"
+            >
+              {["w-24", "w-32", "w-20"].map((width) => (
+                <div key={width} className="flex h-8 items-center gap-2 px-2">
+                  <Skeleton className="size-4 shrink-0 rounded-md bg-sidebar-border/60 motion-reduce:animate-none" />
+                  <Skeleton
+                    className={cn(
+                      "h-2.5 rounded-full bg-sidebar-border/60 motion-reduce:animate-none",
+                      width,
+                    )}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : null}
+          <div className="flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground">
+            <Icon
+              name="Loading"
+              className="size-3 motion-safe:animate-spin"
+              aria-hidden="true"
+            />
+            <span className="animate-shine">Loading plugins…</span>
+          </div>
+        </div>
+      ) : null}
       {hidden.length > 0 ? (
         <SidebarNavigationMoreRow
           hiddenRows={hidden}
@@ -1039,6 +1075,7 @@ function PluginNavSidebarItem({
     <SidebarNavRowChrome
       {...props}
       rowKey={rowKey}
+      loading={panel === null}
       title={chrome.title}
       icon={<PluginIcon pluginId={chrome.pluginId} icon={chrome.icon} />}
       isActive={pathname === path || pathname.startsWith(`${path}/`)}
@@ -1059,6 +1096,7 @@ function PluginNavSidebarItem({
 
 interface SidebarNavRowChromeProps {
   rowKey: string;
+  loading?: boolean;
   title: string;
   icon: ReactNode;
   isActive: boolean;
@@ -1075,6 +1113,7 @@ interface SidebarNavRowChromeProps {
 
 function SidebarNavRowChrome({
   rowKey,
+  loading = false,
   title,
   icon,
   isActive,
@@ -1121,7 +1160,12 @@ function SidebarNavRowChrome({
         <div
           ref={rowRef}
           style={rowStyle}
-          className={cn(SIDEBAR_HOVER_ACTIONS_ROW_CLASS, "relative")}
+          className={cn(
+            SIDEBAR_HOVER_ACTIONS_ROW_CLASS,
+            "relative",
+            !loading &&
+              "motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200",
+          )}
           data-sidebar-navigation-item={rowKey}
         >
           <Button
@@ -1134,6 +1178,7 @@ function SidebarNavRowChrome({
               accessory && "pr-18",
               isActive && "bg-sidebar-accent text-sidebar-foreground",
             )}
+            aria-busy={loading || undefined}
             aria-current={isActive ? "page" : undefined}
             ref={dragBindings?.setActivatorNodeRef}
             {...dragBindings?.attributes}
@@ -1143,7 +1188,11 @@ function SidebarNavRowChrome({
           >
             {icon}
             <span className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
-              <span className="min-w-0 truncate">{title}</span>
+              <span
+                className={cn("min-w-0 truncate", loading && "animate-shine")}
+              >
+                {title}
+              </span>
               {splitMiniMap ? (
                 <SplitPaneMiniMap
                   slots={splitMiniMap}

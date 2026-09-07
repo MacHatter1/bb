@@ -384,6 +384,18 @@ export function createPluginRuntime(context: PluginRuntimeContext) {
     );
   }
 
+  function getStatus(row: Pick<InstalledPluginRow, "id" | "enabled">): {
+    status: PluginRuntimeStatus;
+    detail: string | null;
+  } {
+    return (
+      statuses.get(row.id) ?? {
+        status: row.enabled ? "starting" : "disabled",
+        detail: null,
+      }
+    );
+  }
+
   function setDevBuildProblem(
     id: string,
     kind: PluginDevBuildKind,
@@ -1257,6 +1269,7 @@ export function createPluginRuntime(context: PluginRuntimeContext) {
   }
 
   async function loadOne(row: InstalledPluginRow): Promise<string | null> {
+    if (row.enabled && !loaded.has(row.id)) setStatus(row.id, "starting");
     await populateIdentity(row);
     if (!row.enabled) {
       setStatus(row.id, "disabled");
@@ -1733,11 +1746,9 @@ export function createPluginRuntime(context: PluginRuntimeContext) {
     if (!plugin) {
       const row = getInstalledPlugin(deps.db, id);
       if (!row) return { outcome: "unknown-plugin" };
-      const runtime = statuses.get(id);
       return {
         outcome: "not-running",
-        status: runtime?.status ?? (row.enabled ? "error" : "disabled"),
-        detail: runtime?.detail ?? (row.enabled ? "not loaded" : null),
+        ...getStatus(row),
       };
     }
     const value = find(plugin);
@@ -1764,6 +1775,7 @@ export function createPluginRuntime(context: PluginRuntimeContext) {
     disposeOne,
     buildQueuedMessageEventEmitter,
     emitThreadEvent,
+    getStatus,
     handlerStats,
     handleUncaughtException,
     hungServices,

@@ -1172,7 +1172,12 @@ describe("PluginDetail runtime health", () => {
   function renderRuntimeStatus(
     status: Extract<
       PluginListItem["status"],
-      "error" | "incompatible" | "missing" | "needs-configuration" | "degraded"
+      | "starting"
+      | "error"
+      | "incompatible"
+      | "missing"
+      | "needs-configuration"
+      | "degraded"
     >,
     overrides: Partial<PluginListItem> = {},
   ) {
@@ -1210,6 +1215,16 @@ describe("PluginDetail runtime health", () => {
     );
     return { ...result, queryClient };
   }
+
+  it("shows startup as a neutral status without failure recovery", () => {
+    renderRuntimeStatus("starting", { statusDetail: null });
+    expect(screen.getByRole("status").textContent).toContain("Starting");
+    expect(screen.getByRole("status").textContent).toContain(
+      "The plugin is starting.",
+    );
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reload" })).toBeNull();
+  });
 
   it("lifts a failed runtime status into a destructive alert above the content", () => {
     const { container } = renderRuntimeStatus("error");

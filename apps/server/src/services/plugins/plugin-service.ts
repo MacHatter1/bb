@@ -908,6 +908,7 @@ export function createPluginService(deps: PluginServiceDeps): PluginService {
     disposeOne,
     buildQueuedMessageEventEmitter,
     emitThreadEvent,
+    getStatus,
     handlerStats,
     handleUncaughtException,
     hungServices,
@@ -1244,7 +1245,7 @@ export function createPluginService(deps: PluginServiceDeps): PluginService {
     return rows
       .sort((a, b) => a.id.localeCompare(b.id))
       .map((row) => {
-        const runtime = statuses.get(row.id);
+        const runtime = getStatus(row);
         const stats = handlerStats.get(row.id);
         const loadedPlugin = loaded.get(row.id);
         const cliRegistration = loadedPlugin?.handle.cli.registration;
@@ -1294,12 +1295,8 @@ export function createPluginService(deps: PluginServiceDeps): PluginService {
             (loadedPlugin !== undefined
               ? brandingAssets.get(row.id)?.compactIcon?.url
               : identity?.brandingAssets.compactIcon?.url) ?? null,
-          status: runtime?.status ?? (row.enabled ? "error" : "disabled"),
-          statusDetail: runtime
-            ? runtime.detail
-            : row.enabled
-              ? "not loaded"
-              : null,
+          status: runtime.status,
+          statusDetail: runtime.detail,
           handlerStats: stats
             ? { ...stats }
             : { count: 0, totalMs: 0, maxMs: 0, errorCount: 0 },
@@ -2207,9 +2204,7 @@ export function createPluginService(deps: PluginServiceDeps): PluginService {
       if (!plugin) {
         const row = getInstalledPlugin(deps.db, id);
         if (!row) return fail(`unknown plugin "${id}"`);
-        const runtime = statuses.get(id);
-        const status = runtime?.status ?? (row.enabled ? "error" : "disabled");
-        const detail = runtime?.detail ?? (row.enabled ? "not loaded" : null);
+        const { status, detail } = getStatus(row);
         return fail(
           `plugin "${id}" is not running (status: ${status}${detail ? ` — ${detail}` : ""})`,
         );

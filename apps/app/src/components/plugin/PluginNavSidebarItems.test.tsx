@@ -37,6 +37,13 @@ import {
   pluginNavPanelOrderAtom,
   pluginNavVisiblePanelKeysAtom,
 } from "./pluginNavSidebarAtoms";
+import {
+  markPluginFrontendsSettled,
+  resetPluginFrontendBootStateForTest,
+  setServerPluginsStarting,
+  setPluginFrontendReconcilePending,
+} from "@/lib/plugin-frontend-boot-state";
+import { writeLastKnownPluginNavPanelChrome } from "@/lib/plugin-nav-panel-chrome";
 import { splitLayoutAtom } from "@/lib/split-layout/atoms";
 import { countPanes, findPaneByContent } from "@/lib/split-layout";
 import { makePluginRegistrationSet as registrationSet } from "@/test/fixtures/plugins";
@@ -219,6 +226,8 @@ async function openCustomizeFromContextMenu(
 }
 
 beforeEach(() => {
+  resetPluginFrontendBootStateForTest();
+  markPluginFrontendsSettled();
   window.localStorage.clear();
   resetAllCrashedPluginSlotsForTest();
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -227,6 +236,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  resetPluginFrontendBootStateForTest();
   resetPluginSlotStoreForTest();
   resetAllCrashedPluginSlotsForTest();
   vi.restoreAllMocks();
@@ -234,6 +244,62 @@ afterEach(() => {
 });
 
 describe("PluginNavSidebarItems", () => {
+  it("shows placeholders on first launch and removes them when startup settles", () => {
+    resetPluginFrontendBootStateForTest();
+    renderSidebarItems({
+      builtInEntries: [builtInEntry("new-thread", "New thread")],
+    });
+    expect(
+      screen.getByRole("status", { name: "Loading plugins" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByTestId("plugin-nav-loading-placeholders").children,
+    ).toHaveLength(3);
+    expect(screen.getByRole("button", { name: "New thread" })).toBeTruthy();
+    act(() => markPluginFrontendsSettled());
+    expect(
+      screen.queryByRole("status", { name: "Loading plugins" }),
+    ).toBeNull();
+    expect(screen.queryByTestId("plugin-nav-loading-placeholders")).toBeNull();
+  });
+
+  it("keeps remembered labels while the server starts, then reveals ready panels in place", () => {
+    writeLastKnownPluginNavPanelChrome([
+      {
+        pluginId: "docs",
+        id: "main",
+        path: "main",
+        title: "Docs",
+        icon: "Puzzle",
+      },
+    ]);
+    setServerPluginsStarting(true);
+    renderSidebarItems();
+    const row = screen.getByRole("button", { name: "Docs" });
+    expect(row.getAttribute("aria-busy")).toBe("true");
+    expect(screen.getByText("Docs").classList.contains("animate-shine")).toBe(
+      true,
+    );
+    expect(screen.queryByTestId("plugin-nav-loading-placeholders")).toBeNull();
+    act(() => {
+      setPluginFrontendReconcilePending(true);
+      setServerPluginsStarting(false);
+      registerPanel("docs", "Docs");
+    });
+    expect(screen.getByRole("button", { name: "Docs" })).toBe(row);
+    expect(row.hasAttribute("aria-busy")).toBe(false);
+    expect(
+      screen.getByRole("status", { name: "Loading plugins" }),
+    ).toBeTruthy();
+    act(() => setPluginFrontendReconcilePending(false));
+    expect(
+      screen.queryByRole("status", { name: "Loading plugins" }),
+    ).toBeNull();
+    expect(screen.getByText("Docs").classList.contains("animate-shine")).toBe(
+      false,
+    );
+  });
+
   it("collapses the entire subsection with zero traditional plugins", () => {
     renderSidebarItems();
 

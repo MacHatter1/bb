@@ -26,6 +26,7 @@ import {
 } from "@bb/db";
 import { PLUGIN_SDK_VERSION, type SystemChangeKind } from "@bb/domain";
 import type { Logger } from "@bb/logger";
+import { pluginListResponseSchema } from "@bb/server-contract";
 import { createAiServiceRegistry } from "../../../src/services/ai/ai-service-registry.js";
 import {
   createPluginService,
@@ -173,6 +174,71 @@ describe("plugin service", () => {
     expect(entry.status).toBe("running");
     expect(service.getApi("greeter")).toBeDefined();
   });
+
+  it.each(["startup", "retry"])(
+    "reports starting while a %s factory is pending",
+    async (mode) => {
+      const rootDir = await writePlugin(workDir, {
+        name: "bb-plugin-starting",
+        serverSource: `export default function plugin() { throw new Error("failed"); }`,
+      });
+      expect((await service.installPath(rootDir)).status).toBe("error");
+      if (mode === "startup") {
+        await service.stop();
+        service = createTelemetryTrackedService([]);
+        expect(service.list()[0]).toMatchObject({
+          status: "starting",
+          statusDetail: null,
+        });
+      }
+      let release = () => {};
+      let entered = () => {};
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const loading = new Promise<void>((resolve) => {
+        entered = resolve;
+      });
+      vi.stubGlobal("__startingPluginGate", gate);
+      vi.stubGlobal("__startingPluginEntered", entered);
+      await writeFile(
+        join(rootDir, "server.ts"),
+        `export default async function plugin() {
+      globalThis.__startingPluginEntered();
+      await globalThis.__startingPluginGate;
+    }`,
+      );
+      const operation =
+        mode === "startup" ? service.start() : service.reload("starting");
+      try {
+        await loading;
+        const { plugins } = pluginListResponseSchema.parse({
+          plugins: service.list(),
+        });
+        expect(plugins[0]).toMatchObject({
+          status: "starting",
+          statusDetail: null,
+        });
+        expect(service.getHttpRoute("starting", "GET", "/")).toEqual({
+          outcome: "not-running",
+          status: "starting",
+          detail: null,
+        });
+        expect(await service.runCliCommand("starting", [], {})).toMatchObject({
+          exitCode: 1,
+          stderr: 'plugin "starting" is not running (status: starting)',
+        });
+      } finally {
+        release();
+        await operation;
+        vi.unstubAllGlobals();
+      }
+      expect(service.list()[0]).toMatchObject({
+        status: "running",
+        statusDetail: null,
+      });
+    },
+  );
 
   it("summarizes user-facing capabilities and drops the live ones when disabled", async () => {
     const rootDir = join(workDir, "bb-plugin-capabilities");

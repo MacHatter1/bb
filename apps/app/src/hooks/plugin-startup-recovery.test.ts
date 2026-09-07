@@ -51,8 +51,8 @@ it.each(["initial connect", "reconnect", "reload notification"])(
       pluginListQueryKey(true),
       plugins.map((plugin) => ({
         ...plugin,
-        status: "error",
-        statusDetail: "not loaded",
+        status: "starting",
+        statusDetail: null,
       })),
     );
     const fetch = vi.fn(async () => Response.json({ plugins }));

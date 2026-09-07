@@ -523,8 +523,8 @@ function PluginRuntimeStatusAlert({
     .join(" ");
   return (
     <PluginBannerBar
-      role="alert"
-      tone={runtimeStatus.tone === "error" ? "destructive" : "warning"}
+      role={plugin.status === "starting" ? "status" : "alert"}
+      tone={runtimeStatus.tone === "error" ? "destructive" : runtimeStatus.tone}
       icon={runtimeStatus.icon}
       title={runtimeStatus.label}
       detail={detail}
