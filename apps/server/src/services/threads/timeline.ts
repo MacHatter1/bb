@@ -51,7 +51,7 @@ import {
   isTimelineCursorSequencePresent,
   listStoredConversationOutlineEventRows,
   listStoredClientTurnRequestIdsInRange,
-  listStoredEventRows,
+  listStoredEventRowsSingleQuery,
   listTimelineInterruptionRows,
   listStoredClientTurnRequestRowsByKeys,
   listStoredEventRowsByParentToolCallIds,
@@ -1050,7 +1050,7 @@ function selectStandardTimelineEventRows(
     profile,
     "group-context-query",
     () =>
-      listStoredEventRows(db, {
+      listStoredEventRowsSingleQuery(db, {
         threadId: thread.id,
         afterSequence: contextStart - 1,
         beforeSequence: contextEnd + 1,
@@ -1237,6 +1237,7 @@ function buildThreadTimelineInternal(
   thread: Thread,
   options: BuildThreadTimelineOptions,
 ): BuildThreadTimelineInternalResult {
+  const workspaceRoot = resolveThreadWorkspaceRoot(db, thread);
   const snapshot = resolveTimelineSnapshot(
     db,
     thread,
@@ -1247,7 +1248,7 @@ function buildThreadTimelineInternal(
       options.maxInlineOutputChars,
       options.providerDisplayName ?? null,
       thread.title ?? thread.titleFallback ?? "",
-      resolveThreadWorkspaceRoot(db, thread),
+      workspaceRoot,
       options.completedTurnDisplay,
     ]),
     options.maxSeq === 0 ? undefined : options.maxSeq,
@@ -1372,7 +1373,7 @@ function buildThreadTimelineInternal(
     planCommand: options.planCommand,
     threadStatus: snapshot.status,
     threadName: thread.title ?? thread.titleFallback ?? "",
-    workspaceRoot: resolveThreadWorkspaceRoot(db, thread),
+    workspaceRoot,
   };
   const contextWindowEvents = measureThreadTimelineStage(
     profile,

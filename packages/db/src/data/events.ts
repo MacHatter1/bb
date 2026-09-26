@@ -1517,6 +1517,42 @@ export function listStoredEventRows(
   return merged;
 }
 
+export function listStoredEventRowsSingleQuery(
+  db: DbConnection,
+  args: ListStoredEventRowsArgs,
+): StoredEventRow[] {
+  if (args.types?.length === 0) {
+    return [];
+  }
+
+  const limit = args.limit ?? Number.MAX_SAFE_INTEGER;
+  const order = args.order ?? "asc";
+  const types =
+    args.types === undefined ? undefined : [...new Set(args.types)];
+  return db
+    .select(storedEventRowSqlFields(null))
+    .from(
+      types === undefined
+        ? events
+        : sql`${events} INDEXED BY events_thread_type_sequence_idx`,
+    )
+    .where(
+      and(
+        eq(events.threadId, args.threadId),
+        args.afterSequence === undefined
+          ? undefined
+          : gt(events.sequence, args.afterSequence),
+        args.beforeSequence === undefined
+          ? undefined
+          : lt(events.sequence, args.beforeSequence),
+        types === undefined ? undefined : inArray(events.type, types),
+      ),
+    )
+    .orderBy(order === "desc" ? desc(events.sequence) : events.sequence)
+    .limit(limit)
+    .all();
+}
+
 export function listLatestThreadStateEventRowsByThreadIds(
   db: DbQueryConnection,
   args: ListLatestThreadStateEventRowsByThreadIdsArgs,
