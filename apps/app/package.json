@@ -76,6 +76,7 @@
     "jotai-family": "^1.0.1",
     "katex": "^0.16.22",
     "mermaid": "^11.15.0",
+    "micromark-extension-directive": "^4.0.0",
     "nanoid": "^5.1.6",
     "partysocket": "^1.1.16",
     "picomatch": "^4.0.5",
@@ -119,11 +120,14 @@
     "cacache": "^20.0.4",
     "lightningcss": "^1.32.0",
     "mdast-util-to-hast": "^13.2.1",
+    "micromark-util-types": "^2.0.2",
     "oniguruma-to-es": "^4.3.4",
+    "remark-parse": "^11.0.0",
     "sharp": "^0.34.5",
     "tailwindcss": "^4.3.0",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "typescript-7": "npm:typescript@^7.0.2",
+    "unified": "^11.0.5",
     "vite": "^8.0.12"
   }
 }

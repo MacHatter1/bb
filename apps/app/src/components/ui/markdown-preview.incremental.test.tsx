@@ -251,6 +251,10 @@ const CURATED_DOCUMENTS: ReadonlyArray<readonly [string, string]> = [
     'Intro.\n\n::inline-vis{file="a.html"}\n\n> quoted **bold**\n\nSee thr_mentioned and @thread:thr_mentioned.\n\n[My file](</workspace/My File.ts:12>) and ![img](/workspace/a.png)\n\n:::note\nbox\n\n::inline-vis{file="b.html"}\n:::\n\nTail.',
   ],
   [
+    "glued directives and attribute formatting",
+    'Intro.\n\n::inline-vis{file="my*report*.html"}Next **bold** [docs].\n::inline-vis{file="second.html"}\n\n> ::inline-vis{file="quote.html"}Quoted *tail*.\n\n\\::inline-vis{file="literal.html"}Literal.\n\n[docs]: https://example.com\n',
+  ],
+  [
     "frontmatter and late references",
     "---\ntitle: Plan\nowner: me\n---\n\nUse [the docs] and a note[^1].\n\nMiddle.\n\n[the docs]: https://example.com\n\n[^1]: The note.\n\nAfter.",
   ],
@@ -306,31 +310,36 @@ describe("MarkdownPreview incremental blocks", () => {
     60_000,
   );
 
-  it("keeps settled code and directive DOM connected across advances and a late definition", () => {
-    const initial =
-      'Intro.\n\n```ts\nconst a = 1;\n```\n\n::inline-vis{file="a.html"}\n\nUse [docs].\n\n';
-    const legs = createDifferentialLegs(initial);
-    const line = legs.incremental.querySelector("pre code span.sh__line");
-    const directive = within(legs.incremental).getByTestId("inline-vis");
-    if (line === null) {
-      throw new Error("Expected a highlighted settled code block");
-    }
+  it.each(["", "Next **bold** tail."])(
+    "keeps settled code and directive DOM connected across advances and a late definition: %s",
+    (tail) => {
+      const initial =
+        'Intro.\n\n```ts\nconst a = 1;\n```\n\n::inline-vis{file="a.html"}' +
+        tail +
+        "\n\nUse [docs].\n\n";
+      const legs = createDifferentialLegs(initial);
+      const line = legs.incremental.querySelector("pre code span.sh__line");
+      const directive = within(legs.incremental).getByTestId("inline-vis");
+      if (line === null) {
+        throw new Error("Expected a highlighted settled code block");
+      }
 
-    const advanced = `${initial}More.\n\n`;
-    legs.update(advanced);
-    expect(line.isConnected).toBe(true);
-    expect(directive.isConnected).toBe(true);
+      const advanced = `${initial}More.\n\n`;
+      legs.update(advanced);
+      expect(line.isConnected).toBe(true);
+      expect(directive.isConnected).toBe(true);
 
-    legs.update(`${advanced}[docs]: https://example.com\n\n`);
-    expect(
-      within(legs.incremental)
-        .getByRole("link", { name: "docs" })
-        .getAttribute("href"),
-    ).toBe("https://example.com");
-    expect(line.isConnected).toBe(true);
-    expect(directive.isConnected).toBe(true);
-    expect(counts.incremental.mounts).toBe(1);
-  });
+      legs.update(`${advanced}[docs]: https://example.com\n\n`);
+      expect(
+        within(legs.incremental)
+          .getByRole("link", { name: "docs" })
+          .getAttribute("href"),
+      ).toBe("https://example.com");
+      expect(line.isConnected).toBe(true);
+      expect(directive.isConnected).toBe(true);
+      expect(counts.incremental.mounts).toBe(1);
+    },
+  );
 
   it("mounts the first 32 of 34 directives across pieces like a single document", () => {
     const content = Array.from(

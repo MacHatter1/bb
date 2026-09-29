@@ -4,19 +4,17 @@ import {
   type ComponentType,
   type ReactNode,
 } from "react";
-import type {
-  Nodes,
-  Paragraph,
-  Parent,
-  PhrasingContent,
-  RootContent,
-} from "mdast";
+import type { Nodes, Paragraph, Parent, RootContent } from "mdast";
 import type {} from "mdast-util-to-hast";
 import type {
   BbNavigate,
   PluginMessageDirectiveProps,
 } from "@get-bb/plugin-sdk";
-import { visit } from "unist-util-visit";
+import { SKIP, visit } from "unist-util-visit";
+import type {} from "remark-parse";
+import { directive as directiveSyntax } from "micromark-extension-directive";
+import type { Extension } from "micromark-util-types";
+import type { Processor } from "unified";
 import { PluginSlotMount } from "@/components/plugin/PluginSlotMount.js";
 import { PluginThreadPanelNavigationProvider } from "@/components/plugin/plugin-thread-panel-navigation.js";
 import {
@@ -221,121 +219,92 @@ function asDirectiveNode(node: unknown): DirectiveNode | null {
   return null;
 }
 
-const GLUED_LEAF_DIRECTIVE_NAME_PATTERN = /^::([A-Za-z0-9_-]+)/;
-
-function parseDirectiveAttributeBody(body: string): Record<string, string> {
-  const attributes: Record<string, string> = {};
-  const pattern =
-    /([A-Za-z0-9_-]+)\s*=\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s"']+)/g;
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(body)) !== null) {
-    const key = match[1]!;
-    const raw = match[2]!;
-    if (raw.startsWith('"')) {
-      try {
-        attributes[key] = JSON.parse(raw) as string;
-      } catch {
-        attributes[key] = raw.slice(1, -1);
-      }
-    } else if (raw.startsWith("'")) {
-      attributes[key] = raw
-        .slice(1, -1)
-        .replace(/\\'/g, "'")
-        .replace(/\\\\/g, "\\");
-    } else {
-      attributes[key] = raw;
-    }
-  }
-  return attributes;
-}
-
-interface GluedLeafDirective {
-  attributes: Record<string, string>;
-  directiveEnd: number;
-  name: string;
-}
-
-function findQuotedBraceEnd(text: string, openIndex: number): number {
-  let quote: string | null = null;
-  for (let i = openIndex + 1; i < text.length; i += 1) {
-    const char = text[i]!;
-    if (quote !== null) {
-      if (char === "\\") {
-        i += 1;
-      } else if (char === quote) {
-        quote = null;
-      }
-      continue;
-    }
-    if (char === '"' || char === "'") {
-      quote = char;
-    } else if (char === "}") {
-      return i;
-    }
-  }
-  return -1;
-}
-
-function parseGluedLeafDirective(text: string): GluedLeafDirective | null {
-  const nameMatch = GLUED_LEAF_DIRECTIVE_NAME_PATTERN.exec(text);
-  if (nameMatch === null) {
-    return null;
-  }
-  const name = nameMatch[1]!;
-  let pos = nameMatch[0].length;
-  if (text[pos] === "[") {
-    let depth = 0;
-    let end = -1;
-    for (let i = pos; i < text.length; i += 1) {
-      const char = text[i]!;
-      if (char === "\\") {
-        i += 1;
-      } else if (char === "[") {
-        depth += 1;
-      } else if (char === "]") {
-        depth -= 1;
-        if (depth === 0) {
-          end = i;
-          break;
-        }
-      }
-    }
-    if (end === -1) {
-      return null;
-    }
-    pos = end + 1;
-  }
-  if (text[pos] !== "{") {
-    return null;
-  }
-  const close = findQuotedBraceEnd(text, pos);
-  if (close === -1) {
-    return null;
+function gluedDirectiveSyntax(registry: MessageDirectiveRegistry): Extension {
+  const constructs = directiveSyntax().text?.[58];
+  const textDirective = Array.isArray(constructs) ? constructs[0] : constructs;
+  if (textDirective === undefined) {
+    throw new Error("Directive text tokenizer is unavailable");
   }
   return {
-    attributes: parseDirectiveAttributeBody(text.slice(pos + 1, close)),
-    directiveEnd: close + 1,
-    name,
+    text: {
+      58: {
+        previous: (code) => code === null,
+        tokenize(effects, ok, nok) {
+          const eventStart = this.events.length;
+          const startLine = this.now().line;
+          const start = textDirective.tokenize.call(
+            this,
+            effects,
+            (code) => {
+              let name = "";
+              let hasAttributes = false;
+              for (let i = eventStart; i < this.events.length; i += 1) {
+                const [kind, token] = this.events[i]!;
+                if (kind !== "exit") continue;
+                if (token.type === "directiveTextName") {
+                  name = this.sliceSerialize(token);
+                } else if (token.type === "directiveTextAttributes") {
+                  hasAttributes =
+                    token.start.line === startLine &&
+                    token.end.line === startLine;
+                }
+              }
+              const entry = registry.get(name);
+              return hasAttributes && entry?.status === "ok"
+                ? ok(code)
+                : nok(code);
+            },
+            nok,
+          );
+          return (code) => {
+            const afterMarker = start(code);
+            return (secondColon) => {
+              if (secondColon !== 58 || afterMarker === undefined) {
+                return nok(secondColon);
+              }
+              effects.enter("directiveTextMarker");
+              effects.consume(secondColon);
+              effects.exit("directiveTextMarker");
+              return afterMarker;
+            };
+          };
+        },
+      },
+    },
   };
 }
 
-export function remarkMessageDirectives(args: {
-  indexBase: number;
-  limit: number;
-  mounts: MountedMessageDirective[];
-  registry: MessageDirectiveRegistry;
-}) {
+export function remarkMessageDirectives(
+  this: Processor,
+  args: {
+    indexBase: number;
+    limit: number;
+    mounts: MountedMessageDirective[];
+    registry: MessageDirectiveRegistry;
+  },
+) {
   const { indexBase, limit, mounts, registry } = args;
+  const data = this.data();
+  const extensions =
+    data.micromarkExtensions ?? (data.micromarkExtensions = []);
+  extensions.push(gluedDirectiveSyntax(registry));
   return (tree: Nodes, file: RemarkMessageDirectiveFile): void => {
     const markdownSource =
       typeof file.value === "string" ? file.value : String(file.value ?? "");
     mounts.length = 0;
     visit(tree, (node, index, parent: Parent | undefined) => {
-      const directive = asDirectiveNode(node);
-      if (directive === null || parent === undefined || index === undefined) {
-        return;
-      }
-      const marker = DIRECTIVE_MARKERS[directive.type];
+      if (parent === undefined || index === undefined) return;
+      const paragraph = node.type === "paragraph" ? node : null;
+      const leadingDirective = asDirectiveNode(paragraph?.children[0]);
+      const isGlued =
+        leadingDirective?.type === "textDirective" &&
+        markdownSource.startsWith(
+          "::",
+          leadingDirective.position?.start?.offset ?? -1,
+        );
+      const directive = isGlued ? leadingDirective : asDirectiveNode(node);
+      if (directive === null) return;
+      const marker = isGlued ? "::" : DIRECTIVE_MARKERS[directive.type];
       const name = typeof directive.name === "string" ? directive.name : "";
       const attributes = normalizeDirectiveAttributes(directive.attributes);
       const source = directiveSourceFromNode(
@@ -348,12 +317,13 @@ export function remarkMessageDirectives(args: {
 
       const entry = registry.get(name);
       if (
-        directive.type !== "leafDirective" ||
+        (!isGlued && directive.type !== "leafDirective") ||
         name.length === 0 ||
         entry === undefined ||
         entry.status === "collision" ||
         mounts.length >= limit
       ) {
+        if (isGlued) return;
         return spliceLiteralDirective(parent, index, directive.type, source);
       }
 
@@ -364,70 +334,17 @@ export function remarkMessageDirectives(args: {
         slot: entry.slot,
         source,
       });
-      parent.children.splice(index, 1, messageDirectiveMountNode(mountIndex));
-      return index;
-    });
-    visit(tree, (node, index, parent: Parent | undefined) => {
-      if (
-        node?.type !== "paragraph" ||
-        parent === undefined ||
-        index === undefined
-      ) {
-        return;
-      }
-      const paragraph = node as Parent;
-      const first = paragraph.children[0];
-      if (first?.type !== "text" || typeof first.value !== "string") {
-        return;
-      }
-      const leadingTrimmed = first.value.replace(/^[ \t]+/, "");
-      if (!leadingTrimmed.startsWith("::")) {
-        return;
-      }
-      const parsed = parseGluedLeafDirective(leadingTrimmed);
-      if (parsed === null || parsed.name.length === 0) {
-        return;
-      }
-      const entry = registry.get(parsed.name);
-      if (
-        entry === undefined ||
-        entry.status === "collision" ||
-        mounts.length >= limit
-      ) {
-        return;
-      }
-      const trailing = leadingTrimmed.slice(parsed.directiveEnd);
-      const hasTrailingContent =
-        trailing.trim().length > 0 || paragraph.children.length > 1;
-      if (!hasTrailingContent) {
-        return;
-      }
-      const mountIndex = indexBase + mounts.length;
-      const source = reconstructDirectiveSource(parsed.name, parsed.attributes);
-      mounts.push({
-        attributes: parsed.attributes,
-        index: mountIndex,
-        slot: entry.slot,
-        source,
-      });
-      const trimmedTrailing = trailing.replace(/^[ \t]+/, "");
-      const remainder: PhrasingContent[] = [];
-      if (trimmedTrailing.length > 0) {
-        remainder.push({ type: "text", value: trimmedTrailing });
-      }
-      const paragraphChildren = (paragraph as Paragraph).children;
-      for (let i = 1; i < paragraphChildren.length; i += 1) {
-        remainder.push(paragraphChildren[i]!);
-      }
-      if (remainder.length === 0) {
-        parent.children.splice(index, 1, messageDirectiveMountNode(mountIndex));
-        return index;
-      }
-      parent.children.splice(index, 1, messageDirectiveMountNode(mountIndex), {
-        type: "paragraph",
-        children: remainder,
-      });
-      return index + 1;
+      const remainder: Paragraph | null =
+        isGlued && paragraph !== null && paragraph.children.length > 1
+          ? { ...paragraph, children: paragraph.children.slice(1) }
+          : null;
+      parent.children.splice(
+        index,
+        1,
+        messageDirectiveMountNode(mountIndex),
+        ...(remainder === null ? [] : [remainder]),
+      );
+      return [SKIP, index];
     });
   };
 }

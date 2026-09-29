@@ -251,6 +251,9 @@ importers:
       mermaid:
         specifier: ^11.15.0
         version: 11.15.0
+      micromark-extension-directive:
+        specifier: ^4.0.0
+        version: 4.0.0
       nanoid:
         specifier: ^5.1.6
         version: 5.1.6
@@ -375,9 +378,15 @@ importers:
       mdast-util-to-hast:
         specifier: ^13.2.1
         version: 13.2.1
+      micromark-util-types:
+        specifier: ^2.0.2
+        version: 2.0.2
       oniguruma-to-es:
         specifier: ^4.3.4
         version: 4.3.4(patch_hash=f5db5z5xon23qqwgpdyyzpga5u)
+      remark-parse:
+        specifier: ^11.0.0
+        version: 11.0.0
       sharp:
         specifier: ^0.34.5
         version: 0.34.5
@@ -390,6 +399,9 @@ importers:
       typescript-7:
         specifier: npm:typescript@^7.0.2
         version: typescript@7.0.2
+      unified:
+        specifier: ^11.0.5
+        version: 11.0.5
       vite:
         specifier: ^8.0.12
         version: 8.0.12(@types/node@22.19.10)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.50.0)(tsx@4.23.1)(yaml@2.9.0)
