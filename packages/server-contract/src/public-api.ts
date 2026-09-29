@@ -1,3 +1,4 @@
+import { androidAppPrepareRequestSchema } from "./api/system.js";
 import {
   machineEnvironmentSetSchema,
   machineEnvironmentDeleteSchema,
@@ -195,6 +196,9 @@ import type {
   SystemAttentionResponse,
   SystemConfigReloadResponse,
   SystemConfigResponse,
+  SystemAndroidAppResponse,
+  AndroidAppPreparation,
+  AndroidAppPrepareRequest,
   SystemCliSkillsStatusQuery,
   SystemCliSkillsStatusResponse,
   SystemInstallCliSkillsRequest,
@@ -274,7 +278,6 @@ import type {
   UpdateThreadPluginMetadataRequest,
   UpdateThreadRequest,
   UpdateQueuedMessageRequest,
-  UpdateThreadDraftRequest,
   UploadedPromptAttachment,
   WorkspaceFileListResponse,
   WorkspacePathListResponse,
@@ -306,7 +309,6 @@ import {
   createQueuedMessageRequestSchema,
   queuedMessageListQuerySchema,
   updateQueuedMessageRequestSchema,
-  updateThreadDraftRequestSchema,
   createThreadRequestSchema,
   forkThreadRequestSchema,
   updateThreadPluginMetadataRequestSchema,
@@ -1192,6 +1194,12 @@ export const publicApiRoutes = {
   },
 
   threadSections: {
+    list: defineRoute({
+      path: "/thread-sections",
+      method: "get",
+      request: noRequest<EmptyInput>(),
+      response: jsonResponse<ThreadSectionResponse[]>(),
+    }),
     create: defineRoute({
       path: "/thread-sections",
       method: "post",
@@ -1480,14 +1488,6 @@ export const publicApiRoutes = {
       ),
       response: jsonResponse<ThreadPaneActionResponse>(),
     }),
-    updateDraft: defineRoute({
-      path: "/threads/:id/draft",
-      method: "put",
-      request: jsonRequest<PathId, UpdateThreadDraftRequest>(
-        updateThreadDraftRequestSchema,
-      ),
-      response: jsonResponse<ThreadResponse>(),
-    }),
     tabs: defineRoute({
       path: "/threads/:id/tabs",
       method: "get",
@@ -1771,6 +1771,26 @@ export const publicApiRoutes = {
       method: "get",
       request: noRequest(),
       response: jsonResponse<SystemAttentionResponse>(),
+    }),
+    androidAppPreparation: defineRoute({
+      path: "/system/android-app/preparation",
+      method: "get",
+      request: noRequest(),
+      response: jsonResponse<AndroidAppPreparation>(),
+    }),
+    prepareAndroidApp: defineRoute({
+      path: "/system/android-app/prepare",
+      method: "post",
+      request: jsonRequest<EmptyInput, AndroidAppPrepareRequest>(
+        androidAppPrepareRequestSchema,
+      ),
+      response: jsonResponse<AndroidAppPreparation>(),
+    }),
+    androidApp: defineRoute({
+      path: "/system/android-app",
+      method: "get",
+      request: noRequest(),
+      response: jsonResponse<SystemAndroidAppResponse>(),
     }),
     config: defineRoute({
       path: "/system/config",

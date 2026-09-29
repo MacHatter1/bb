@@ -18,6 +18,7 @@ function renderSection(
         mobileApp: false,
         serverMove: false,
         sidebarProgressiveDisclosure: false,
+        androidTesting: false,
       }}
       onExperimentChange={onExperimentChange}
     />,
@@ -37,6 +38,16 @@ describe("ExperimentsSettingsSection", () => {
     renderSection(onChange);
     fireEvent.click(screen.getByLabelText("Legacy plugin loader (JITI)"));
     expect(onChange).toHaveBeenCalledWith("legacyJitiPluginLoader", true);
+  });
+
+  it("keeps the Android download section hidden when disabled", () => {
+    const onChange = vi.fn();
+    renderSection(onChange);
+    expect(
+      screen.queryByRole("region", { name: "Android app download" }),
+    ).toBeNull();
+    fireEvent.click(screen.getByLabelText("Android App"));
+    expect(onChange).toHaveBeenCalledWith("androidTesting", true);
   });
 
   it("reports mobile app changes", () => {

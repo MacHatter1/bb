@@ -664,10 +664,6 @@ vi.mock("@/hooks/mutations/project-mutations", () => ({
 }));
 
 vi.mock("@/hooks/mutations/thread-runtime-mutations", () => ({
-  useUpdateThreadDraft: () => ({
-    isPending: false,
-    mutate: vi.fn(),
-  }),
   useCancelThreadPlan: () => ({
     isPending: false,
     mutate: mocks.cancelThreadPlanMutate,
@@ -882,7 +878,6 @@ function buildPromptAreaElement({
   return (
     <QueryClientProvider client={testQueryClient}>
       <ThreadDetailPromptArea
-        serverDraft={null}
         activeBackgroundAgentCount={0}
         activeBackgroundCommands={[]}
         activePromptMode={activePromptMode}
@@ -1012,8 +1007,8 @@ describe("ThreadDetailPromptArea", () => {
       screen.getByRole("button", { name: "Capture plugin host" }),
     );
     const pluginSubmission = {
-      pluginId: "example-plugin",
-      data: { kind: "hold" } as const,
+      pluginId: "drafts",
+      data: { kind: "draft" } as const,
     };
 
     await act(async () => {
@@ -1204,7 +1199,6 @@ describe("ThreadDetailPromptArea", () => {
       thread: makeThread({
         runtime: {
           displayStatus: "idle",
-          hostReconnectGraceExpiresAt: null,
         },
         status: "idle",
       }),
@@ -1231,7 +1225,6 @@ describe("ThreadDetailPromptArea", () => {
       thread: makeThread({
         runtime: {
           displayStatus: "provisioning",
-          hostReconnectGraceExpiresAt: null,
         },
         status: "starting",
       }),
@@ -2396,7 +2389,7 @@ describe("ThreadDetailPromptArea", () => {
         environmentId: "env_1",
         id: "thr_source",
         projectId: "proj_source",
-        runtime: { displayStatus: "active", hostReconnectGraceExpiresAt: null },
+        runtime: { displayStatus: "active" },
         status: "active",
         title: "Source thread",
         titleFallback: null,

@@ -1,4 +1,4 @@
-import { useServerThreadDraftSync } from "./useServerThreadDraftSync";
+import { createCoreComposerActions } from "@/lib/plugin-composer-handle";
 import type { MachineRemovalStatus } from "@/lib/machine-removal-display";
 import { ThreadMachineStatus } from "@/components/promptbox/banner/ThreadMachineStatus";
 import {
@@ -199,7 +199,6 @@ interface ThreadDetailPromptAreaProps {
   pendingInteractions: readonly PendingInteraction[];
   pendingInteractionsInitialLoading: boolean;
   queuedMessageCount: number;
-  serverDraft: PromptInput[] | null;
   onChangedFileClick: (selection: WorkspaceChangedFileSelection) => void;
   projectId: string;
   resolveMentionLink: PromptMentionLinkResolver;
@@ -414,7 +413,6 @@ export function ThreadDetailPromptArea({
   pendingInteractions,
   pendingInteractionsInitialLoading,
   queuedMessageCount,
-  serverDraft,
   onChangedFileClick,
   projectId,
   resolveMentionLink,
@@ -519,7 +517,6 @@ export function ThreadDetailPromptArea({
     currentPromptDraftInput,
     activeComposerDraft,
     activeComposerDraftInput,
-    setActiveComposerDraft,
     handleChangeMessage: handleComposerMessageChange,
     removeActiveComposerAttachment,
   } = useActiveComposerDraft({
@@ -530,14 +527,6 @@ export function ThreadDetailPromptArea({
     },
     inlineDraft: inlineEditingQueuedMessage?.draft ?? null,
     inlineSessionRef: inlineDraftSessionRef,
-  });
-  useServerThreadDraftSync({
-    threadId: thread.id,
-    status: thread.status,
-    archived: thread.archivedAt !== null,
-    serverDraft,
-    localDraft: currentPromptDraft,
-    setLocalDraft: promptDraft.setDraft,
   });
   const subscribeInlineQueuedDraft = useComposerHostDraftNotifier(
     inlineEditingQueuedMessage?.draft ?? null,
@@ -1100,6 +1089,13 @@ export function ThreadDetailPromptArea({
       thread.id,
     ],
   );
+
+  const restoreHistoryDraft = useCallback(
+    (draft: PromptDraftState) =>
+      createCoreComposerActions(normalPluginComposerHost).restoreDraft(draft),
+    [normalPluginComposerHost],
+  );
+
   const hasPromptDraftInput = currentPromptDraftInput.length > 0;
   const canSubmitModifierShortcut =
     !shouldHideComposer &&
@@ -1474,7 +1470,7 @@ export function ThreadDetailPromptArea({
       history: {
         currentDraft: currentPromptDraft,
         entries: promptHistoryDrafts,
-        onSelectEntry: promptDraft.setDraft,
+        onSelectEntry: restoreHistoryDraft,
         resetKey: thread.id,
       },
       isFollowUpSubmitting,
@@ -1507,7 +1503,7 @@ export function ThreadDetailPromptArea({
       isHandoffSelection,
       promptHistoryDrafts,
       promptPlaceholder,
-      promptDraft.setDraft,
+      restoreHistoryDraft,
       promptDraft.setTextAndMentions,
       runtimeDisplayStatus,
       steerActiveThreadOnEnter,
@@ -1777,6 +1773,11 @@ export function ThreadDetailPromptArea({
             draft,
             commitInlineQueuedMessage,
           ),
+        isAvailable: () =>
+          isInlineQueuedMessageEditSession(
+            inlineEditingQueuedMessageRef.current,
+            session,
+          ),
         focus: focusInlinePluginComposer,
       };
     }, [
@@ -1823,7 +1824,10 @@ export function ThreadDetailPromptArea({
         historyResetKey: `${thread.id}:${editSessionId}`,
         isSubmitting: isUpdateQueuedMessagePending,
         onChangeMessage: handleComposerMessageChange,
-        onSelectHistoryEntry: setActiveComposerDraft,
+        onSelectHistoryEntry: (draft) =>
+          createCoreComposerActions(
+            queuedMessagePluginComposerHost,
+          ).restoreDraft(draft),
         permission: inlinePermissionConfig,
         pluginComposerHost: queuedMessagePluginComposerHost,
         promptActions: inlinePromptActions,
@@ -1860,7 +1864,6 @@ export function ThreadDetailPromptArea({
     queuedMessagePluginComposerHost,
     removeActiveComposerAttachment,
     runtimeDisplayStatus,
-    setActiveComposerDraft,
     thread.id,
     inlineTypeaheadConfig,
   ]);
@@ -1888,6 +1891,8 @@ export function ThreadDetailPromptArea({
         subscribeDraft: subscribeSentMessageEditDraft,
         setDraft: (nextDraft) =>
           writeSentMessageEditDraft(sentMessageEditRef, operationId, nextDraft),
+        isAvailable: () =>
+          sentMessageEditRef.current?.operationId === operationId,
         focus: focusInlinePluginComposer,
       };
     }, [
@@ -1943,7 +1948,9 @@ export function ThreadDetailPromptArea({
             })),
           onEscape: sentMessageEdit.onCancel,
           onSelectHistoryEntry: (nextDraft) =>
-            sentMessageEdit.updateDraft(() => nextDraft),
+            createCoreComposerActions(
+              sentMessagePluginComposerHost,
+            ).restoreDraft(nextDraft),
           permission: bottomPermissionConfig,
           pluginComposerHost: sentMessagePluginComposerHost,
           promptActions: inlinePromptActions,

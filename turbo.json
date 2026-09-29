@@ -301,6 +301,9 @@
       "persistent": true,
       "passThroughEnv": ["*"]
     },
+    "@bb/mobile#theme:generate": {
+      "cache": false
+    },
     "@bb/mobile#test": {
       "dependsOn": ["//#ensure-native-modules", "topo"],
       "inputs": [
@@ -313,6 +316,15 @@
     "@bb/mobile#dev": {
       "cache": false,
       "persistent": true,
+      "passThroughEnv": ["*"]
+    },
+    "@bb/mobile#build:android:local": {
+      "cache": false,
+      "outputs": ["build-output/**"],
+      "passThroughEnv": ["*"]
+    },
+    "@bb/mobile#e2e:android": {
+      "cache": false,
       "passThroughEnv": ["*"]
     },
     "storybook": {
@@ -537,6 +549,12 @@
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.github/actions/setup-workspace/**",
+        "$TURBO_ROOT$/.github/actions/setup-workspace-tools/**",
+        "$TURBO_ROOT$/.github/actions/cache-workspace/**",
+        "$TURBO_ROOT$/.github/workflows/ci.yml",
+        "$TURBO_ROOT$/.github/workflows/ci-cache-maintenance.yml",
+        "$TURBO_ROOT$/scripts/lib/**",
+        "$TURBO_ROOT$/scripts/forkable-plugins.json",
         "$TURBO_ROOT$/.github/APPROVED_CONTRIBUTORS",
         "$TURBO_ROOT$/.github/workflows/approve-contributor.yml",
         "$TURBO_ROOT$/.github/workflows/pr-gate.yml",
@@ -1290,6 +1308,16 @@
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/packages/plugin-registry/flavors/**"
+      ]
+    },
+    "bb-plugin-drafts#typecheck": {
+      "dependsOn": ["@get-bb/plugin-sdk#build:types", "topo"]
+    },
+    "bb-plugin-drafts#test": {
+      "dependsOn": [
+        "//#ensure-native-modules",
+        "@get-bb/plugin-sdk#build",
+        "topo"
       ]
     },
     "bb-plugin-side-chat#typecheck": {

@@ -33,6 +33,7 @@ const unavailableSystemConfig: SystemConfigResponse = {
     mobileApp: false,
     serverMove: false,
     sidebarProgressiveDisclosure: false,
+    androidTesting: false,
   },
   appearance: defaultAppTheme,
   customThemes: [],

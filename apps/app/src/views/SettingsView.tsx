@@ -1,3 +1,4 @@
+import { AndroidTestingSection } from "@/components/settings/AndroidTestingSection";
 import { MachineEnvironmentSettings } from "@/components/settings/MachineEnvironmentSettings";
 import { MachineAccessSettings } from "@/components/settings/MachineAccessSettings";
 import { useMemo, useRef, useState, type ReactNode } from "react";
@@ -1056,6 +1057,11 @@ const EXPERIMENT_DEFINITIONS: Record<
     description:
       "Load plugin server code with the legacy JITI runtime. Takes effect the next time a plugin loads.",
   },
+  androidTesting: {
+    label: "Android App",
+    description:
+      "Download a test build of the Android app below the experiment flags.",
+  },
   mobileApp: {
     label: "Mobile app",
     description:
@@ -1078,32 +1084,35 @@ export function ExperimentsSettingsSection({
   onExperimentChange,
 }: ExperimentsSettingsSectionProps) {
   return (
-    <SettingsSection
-      title="Experiments"
-      description="Early features that are off by default. Opt in to try them."
-    >
-      <div className="space-y-5">
-        {experimentKeys.map((experimentKey) => {
-          const definition = EXPERIMENT_DEFINITIONS[experimentKey];
-          return (
-            <SettingsWithControl
-              key={experimentKey}
-              label={definition.label}
-              description={definition.description}
-            >
-              <Switch
-                checked={experiments[experimentKey]}
-                disabled={disabled}
-                onCheckedChange={(enabled) =>
-                  onExperimentChange(experimentKey, enabled)
-                }
-                aria-label={definition.label}
-              />
-            </SettingsWithControl>
-          );
-        })}
-      </div>
-    </SettingsSection>
+    <>
+      <SettingsSection
+        title="Experiments"
+        description="Early features that are off by default. Opt in to try them."
+      >
+        <div className="space-y-5">
+          {experimentKeys.map((experimentKey) => {
+            const definition = EXPERIMENT_DEFINITIONS[experimentKey];
+            return (
+              <SettingsWithControl
+                key={experimentKey}
+                label={definition.label}
+                description={definition.description}
+              >
+                <Switch
+                  checked={experiments[experimentKey]}
+                  disabled={disabled}
+                  onCheckedChange={(enabled) =>
+                    onExperimentChange(experimentKey, enabled)
+                  }
+                  aria-label={definition.label}
+                />
+              </SettingsWithControl>
+            );
+          })}
+        </div>
+      </SettingsSection>
+      {experiments.androidTesting ? <AndroidTestingSection /> : null}
+    </>
   );
 }
 

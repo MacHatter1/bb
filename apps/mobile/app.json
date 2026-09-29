@@ -31,6 +31,7 @@
     },
     "android": {
       "package": "app.getbb.mobile",
+      "permissions": ["android.permission.MODIFY_AUDIO_SETTINGS"],
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -67,6 +68,7 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "./plugins/with-selection-accent",
       "expo-router",
       "expo-secure-store",
       "expo-image",

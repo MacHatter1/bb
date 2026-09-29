@@ -245,6 +245,7 @@ export function EnvironmentRow({
     projectId: thread.projectId,
     environmentId: environment?.id ?? "",
     sectionId: thread.sectionId,
+    pinned: thread.pinnedAt !== null,
   });
   const { providers } = useSystemEnvironmentProviders();
   const { providers: machineProviders } = useSystemMachineProviders();

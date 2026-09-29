@@ -63,10 +63,7 @@ export function threadListEntry(
     latestAttentionAt: updatedAt,
     createdAt: seedStartedAt(seed, now),
     updatedAt,
-    runtime: {
-      displayStatus: busy ? "active" : "idle",
-      hostReconnectGraceExpiresAt: null,
-    },
+    runtime: { displayStatus: busy ? "active" : "idle" },
     activity: {
       activeWorkflowCount: 0,
       activeBackgroundAgentCount: 0,
@@ -111,7 +108,6 @@ export function threadResponse(
     canRestoreEnvironment: false,
     canSpawnChild: true,
     queuedMessageCount: 0,
-    draft: null,
   };
 }
 

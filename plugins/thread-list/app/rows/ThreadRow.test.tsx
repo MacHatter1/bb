@@ -3,6 +3,9 @@
 import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getDefaultStore } from "jotai";
+import { DndContext, useDraggable } from "@dnd-kit/core";
+import { CompactViewportOverrideProvider } from "@/components/ui/hooks/use-compact-viewport";
+import { useSidebarReorderDnd } from "../dnd/useSidebarReorderDnd.js";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type {
   PluginSidebarProject,
@@ -216,7 +219,7 @@ afterEach(() => {
 });
 
 describe("ThreadRow", () => {
-  it("shows a labeled provider icon only for a registered provider when enabled", () => {
+  it("keeps the registered provider icon visible during inline rename when enabled", async () => {
     const provider: PluginProvidersState["providers"][number] = {
       id: "provider-test",
       pluginId: "provider-test",
@@ -243,6 +246,15 @@ describe("ThreadRow", () => {
     act(() => getDefaultStore().set(sidebarShowProviderIconsAtom, true));
     expect(screen.getByRole("img", { name: "Test Provider" })).toBeTruthy();
     expect(slot.container.querySelector('[data-provider-logo="/provider-test.svg"]')).toBeTruthy();
+
+    fireEvent.doubleClick(screen.getByText("Thread"));
+    const input = await screen.findByRole("textbox", { name: "Thread name" });
+    expect(screen.getByRole("img", { name: "Test Provider" })).toBeTruthy();
+    fireEvent.change(input, { target: { value: "Scratch name" } });
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(screen.queryByRole("textbox", { name: "Thread name" })).toBeNull();
+    expect(screen.getByRole("img", { name: "Test Provider" })).toBeTruthy();
+    expect(slot.inspection.sidebarActionCalls).toEqual([]);
 
     slot.rerenderThreadRow(createThread({ providerId: "missing" }));
     expect(screen.queryByRole("img", { name: "Test Provider" })).toBeNull();
@@ -1617,6 +1629,87 @@ describe("ThreadRow", () => {
 
     expect(onPointerDown).not.toHaveBeenCalled();
   });
+
+  it.each(["timer", "native context menu"])(
+    "restores the row when %s opens its menu and still allows deliberate dragging",
+    async (trigger) => {
+      const onDragStart = vi.fn();
+      const thread = createThread();
+      function DraggableThread() {
+        const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+          id: thread.id,
+        });
+        return (
+          <ThreadRowHarness
+            thread={thread}
+            options={{
+              ...DEFAULT_OPTIONS,
+              dragBindings: {
+                attributes,
+                listeners,
+                setActivatorNodeRef: setNodeRef,
+                isDragging,
+                disabled: false,
+              },
+            }}
+          />
+        );
+      }
+      function Harness() {
+        const { dndContextProps } = useSidebarReorderDnd({
+          onDragStart,
+          onDragEnd: vi.fn(),
+        });
+        return (
+          <CompactViewportOverrideProvider isCompactViewport>
+            <DndContext {...dndContextProps}>
+              <DraggableThread />
+            </DndContext>
+          </CompactViewportOverrideProvider>
+        );
+      }
+      const slot = renderSlot(
+        { component: Harness },
+        {},
+        {
+          sidebarThreads: { threads: [thread], projects: [] },
+        },
+      );
+      const link = screen.getByRole("link", { name: "Open Thread" });
+      expect(link).toHaveProperty("draggable", false);
+      fireEvent.pointerDown(link, {
+        pointerId: 1,
+        pointerType: "touch",
+        isPrimary: true,
+        clientX: 10,
+        clientY: 10,
+      });
+      fireEvent.touchStart(link, { touches: [{ clientX: 10, clientY: 10 }] });
+      if (trigger === "native context menu") fireEvent.contextMenu(link);
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 550)));
+      expect(
+        slot.container.querySelector("[data-sidebar-touch-armed=true]"),
+      ).not.toBeNull();
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 250)));
+      expect(
+        document.querySelector(
+          '[data-persistent-drawer-content][data-state="open"]',
+        ),
+      ).not.toBeNull();
+      expect(
+        slot.container.querySelector("[data-sidebar-touch-armed-chip]"),
+      ).toBeNull();
+      expect(onDragStart).not.toHaveBeenCalled();
+      fireEvent.touchMove(link, { touches: [{ clientX: 26, clientY: 10 }] });
+      await waitFor(() => expect(onDragStart).toHaveBeenCalledTimes(1));
+      expect(
+        document.querySelector(
+          '[data-persistent-drawer-content][data-state="open"]',
+        ),
+      ).toBeNull();
+      fireEvent.touchEnd(link, { touches: [] });
+    },
+  );
 
   it("starts touch reordering from the thread row", () => {
     const onTouchStart = vi.fn();

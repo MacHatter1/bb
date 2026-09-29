@@ -29,7 +29,7 @@ function defaultLabel(serverUrl: string): string {
 }
 
 const URL_HELP =
-  "A LAN address, a Tailscale Serve URL, or http://127.0.0.1:<port> in the simulator.";
+  "Use your server’s LAN or Tailscale address. Your phone must be able to reach it.";
 
 export function AddServerScreen() {
   const router = useRouter();

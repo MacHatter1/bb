@@ -1,3 +1,5 @@
+import { appendQuoteAndAttachmentsToDraft } from "@bb/client-core";
+import { createCoreComposerActions } from "@/lib/plugin-composer-handle";
 import {
   useCallback,
   useEffect,
@@ -258,7 +260,6 @@ import { useThreadReadTracking } from "@/hooks/useThreadReadTracking";
 import { useThreadUnreadDividerState } from "./useThreadUnreadDividerState";
 import {
   buildTerminalSyncedSecondaryFileTabs,
-  getRetainedTerminalTabId,
   syncTerminalTabsInFixedPanelState,
 } from "@/components/secondary-panel/terminalPanelTabs";
 import {
@@ -405,22 +406,10 @@ function buildHostConnectionNotice(
   thread: ThreadWithRuntime,
   hostName: string | null,
 ): HostConnectionNotice | null {
-  const displayStatus = thread.runtime.displayStatus;
-  if (
-    displayStatus !== "host-reconnecting" &&
-    displayStatus !== "waiting-for-host"
-  ) {
+  if (thread.runtime.displayStatus !== "waiting-for-host") {
     return null;
   }
-
-  const subject = hostName ?? "Host";
-  return {
-    label:
-      displayStatus === "host-reconnecting"
-        ? `${subject} disconnected. Waiting for reconnection...`
-        : `${subject} disconnected`,
-    tone: displayStatus === "host-reconnecting" ? "pending" : "error",
-  };
+  return { label: `${hostName ?? "Host"} disconnected` };
 }
 
 function buildMarkdownPreviewLinkRouting({
@@ -589,10 +578,6 @@ function ThreadDetailViewInternal(props: ThreadRoutePathArgs) {
   const openFixedSecondaryTab = isPersistedSecondaryPanelOpen
     ? activeFixedSecondaryTab
     : null;
-  const retainedTerminalId = getRetainedTerminalTabId({
-    activeTab: activeFixedSecondaryTab,
-    isPanelOpen: isPersistedSecondaryPanelOpen,
-  });
   const activeFixedSecondaryTabId = activeFixedSecondaryTab?.id ?? null;
   const renderSecondaryPanelAsDrawer = useIsCompactViewport();
   const secondaryPanelDrawerVisibility =
@@ -716,7 +701,6 @@ function ThreadDetailViewInternal(props: ThreadRoutePathArgs) {
     syncThreadId: threadId,
     environmentId: thread?.environmentId,
     onCloseLastTab: secondaryPanelDrawerVisibility.closeDrawer,
-    retainedTerminalId,
     storageFileExists: checkThreadStorageFileExists,
     storageFiles: threadStorageFiles,
     terminalSessions: terminalsListQuery.data?.sessions,
@@ -909,10 +893,9 @@ function ThreadDetailViewInternal(props: ThreadRoutePathArgs) {
         ? orderedSecondaryFileTabs
         : buildTerminalSyncedSecondaryFileTabs({
             orderedTabs: orderedSecondaryFileTabs,
-            retainedTerminalId,
             terminalSessions: loadedTerminalSessions,
           }),
-    [loadedTerminalSessions, orderedSecondaryFileTabs, retainedTerminalId],
+    [loadedTerminalSessions, orderedSecondaryFileTabs],
   );
   useEffect(() => {
     if (terminalsListQuery.data === undefined) {
@@ -920,17 +903,11 @@ function ThreadDetailViewInternal(props: ThreadRoutePathArgs) {
     }
     updateFixedPanelTabsState((state) =>
       syncTerminalTabsInFixedPanelState({
-        retainedTerminalId,
         state,
         terminalSessions,
       }),
     );
-  }, [
-    retainedTerminalId,
-    terminalSessions,
-    terminalsListQuery.data,
-    updateFixedPanelTabsState,
-  ]);
+  }, [terminalSessions, terminalsListQuery.data, updateFixedPanelTabsState]);
   const hostsQuery = useHosts({
     enabled:
       hasThreadDetailBootstrapSettled &&
@@ -1020,7 +997,6 @@ function ThreadDetailViewInternal(props: ThreadRoutePathArgs) {
       }),
     [selectionPromptDraftProjectId, selectionPromptDraftThreadId],
   );
-  const addQuoteToComposer = selectionPromptDraft.addQuote;
   const [composerFocusRequestNonce, setComposerFocusRequestNonce] = useState(0);
   const [sentMessageEditSession, setSentMessageEditSession] =
     useState<SentMessageEditSession | null>(null);
@@ -1191,13 +1167,23 @@ function ThreadDetailViewInternal(props: ThreadRoutePathArgs) {
       ),
     [selectionPromptDraft.storageKey],
   );
+  const composerActions = useMemo(
+    () =>
+      createCoreComposerActions({
+        ...selectionPromptDraft,
+        focus: () => setComposerFocusRequestNonce((nonce) => nonce + 1),
+      }),
+    [selectionPromptDraft],
+  );
   const handleSelectionAddToChat = useCallback(
     (text: string, attachments?: readonly PromptDraftAttachment[]) => {
       dismissCompactKeyboard();
-      addQuoteToComposer(text, attachments);
-      setComposerFocusRequestNonce((nonce) => nonce + 1);
+      composerActions.replace((current) =>
+        appendQuoteAndAttachmentsToDraft(current, text, attachments ?? []),
+      );
+      composerActions.focus();
     },
-    [addQuoteToComposer, dismissCompactKeyboard],
+    [composerActions, dismissCompactKeyboard],
   );
   const sendSideChatMessageToMain = useSendSideChatMessageToMain({
     createQueuedMessage,
@@ -1220,6 +1206,7 @@ function ThreadDetailViewInternal(props: ThreadRoutePathArgs) {
     projectId,
     environmentId: thread?.environmentId ?? "",
     sectionId: thread?.sectionId ?? null,
+    pinned: thread?.pinnedAt != null,
   });
   const { providers: registeredEnvironmentProviders } =
     useSystemEnvironmentProviders();
@@ -2544,7 +2531,6 @@ function ThreadDetailViewInternal(props: ThreadRoutePathArgs) {
   const composerFooter = (
     <ThreadDetailPromptArea
       activeBackgroundAgentCount={thread.activeBackgroundAgentCount}
-      serverDraft={thread.draft}
       canUseGitUi={canUseGitUi}
       contextWindowUsage={contextWindowUsage}
       environmentCheckout={threadCheckoutDisplay}
@@ -3013,10 +2999,6 @@ function ThreadDetailViewInternal(props: ThreadRoutePathArgs) {
                   thread.runtime.displayStatus,
                 ) &&
                 !isThreadTimelinePending,
-              ongoingIndicatorLabel:
-                thread.runtime.displayStatus === "host-reconnecting"
-                  ? "Waiting for reconnection"
-                  : undefined,
               timelineRows,
               isStopping: thread.status === "stopping",
               stoppingAnchorAt: thread.updatedAt,

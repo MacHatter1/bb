@@ -35,6 +35,7 @@ describe("experiments", () => {
           .all()
           .map((row) => row.key),
       ).toEqual([
+        "androidTesting",
         "changelogPreview",
         "futureExperiment",
         "legacyJitiPluginLoader",

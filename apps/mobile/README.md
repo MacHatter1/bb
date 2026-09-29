@@ -118,6 +118,105 @@ APIs; keep RN-dependent code out of `src/lib/**` except `src/lib/native`.
 
 ## Prerequisites (macOS)
 
+For Android development, install Android Studio's SDK, a current Android SDK
+platform and build tools, and Java 17. Set `ANDROID_HOME` to the SDK directory
+(`$HOME/Library/Android/sdk` on macOS) and add its `platform-tools` and `emulator`
+directories to PATH. Start an emulator or attach an Android phone with USB
+debugging enabled.
+
+### Android local APK and verification
+
+```bash
+pnpm exec turbo run build:android:local --filter=@bb/mobile
+adb install -r apps/mobile/build-output/bb-android-local.apk
+```
+
+This builds an ARM64 APK with an embedded Release JS bundle and the generated
+Android debug signing key. It runs without Metro, Firebase, EAS, or production
+signing credentials. It is for local testing, not Play distribution. Uninstall
+it before installing an app signed with another key (which removes local app
+data). For an Intel emulator, append `-- x86_64` to the Turbo command.
+
+Run the mobile backend described below, then `adb reverse tcp:41999 tcp:41999`
+so the Android app can reach it at `http://127.0.0.1:41999`. Keep the reverse
+mapping active during tests. Android does not share the Mac loopback directly.
+
+Run `pnpm exec turbo run e2e:android --filter=@bb/mobile` with only the intended
+Android emulator/device connected. The smoke flow clears this app's local data,
+pairs the fixture, sends a message, checks Android back navigation, relaunches,
+and opens native device settings. Use a normal embedded build, not
+`EXPO_PUBLIC_BB_E2E=1`, so the relaunch step can verify saved profiles.
+
+`e2e/android/keyboard.yaml` uses the same backend and checks repeated keyboard
+opening, Back dismissal, draft retention, and sending after dismissal. Run it
+with `maestro test apps/mobile/e2e/android/keyboard.yaml` from the repo root.
+It clears this app's local data, like the main smoke flow.
+
+`plugins/with-selection-accent.js` sets the Android theme accent used by
+WebView selection handles: blue in light mode and pale blue in dark mode.
+The single insertion handle is transparent; the caret and two range-selection
+handles remain visible. This applies to Android native text fields too and is
+separate from the web app's CSS selection highlight.
+The Expo prebuild applies it to both framework and AppCompat theme attributes.
+
+The `react-native-webview` patch zeroes the Android IME inset before WebView
+receives it. `WebViewKeyboardFrame` already resizes the native container for
+the keyboard; forwarding that inset lets newer WebViews shrink the visual
+viewport a second time during opening. Keep the native keyboard frame around
+WebViews when using this patch. System bar and display-cutout insets remain
+unchanged. Recheck this patch when upgrading WebView or changing keyboard
+ownership; see [Android's inset handling guidance](https://developer.android.com/develop/ui/views/layout/webapps/understand-window-insets).
+
+`e2e/android/connect.yaml` additionally needs the local TLS connect stub started
+with `BB_MOBILE_E2E_COOKIE_DOMAIN=stub.localhost`, a
+trusted fixture CA and DNS for `stub.localhost`/`other.localhost` on the test
+emulator, and `adb reverse tcp:42998 tcp:42998`. It resets the stub and checks
+invalid codes, pairing, WebView cookie authentication, relaunch and session
+expiry recovery. Chromium rejects the fixture's default `.localhost` cookie
+domain; the host-specific override tests one server, not account-wide cookie
+sharing across servers. Do not change release TLS validation to run this fixture.
+
+The Hugeicons React Native patch restores missing SVG ellipse/polygon support
+(the globe otherwise renders as a circle with a minus sign).
+
+The cookie-library pnpm patch replaces its obsolete JCenter repository and
+declares its Android namespace for current Gradle. If adding/changing a native
+dependency leaves stale pnpm paths in Android autolinking, regenerate the
+ignored native project before rebuilding.
+
+The `react-native-screens` patch skips header updates for detached Android
+screens, matching the fix proposed in upstream
+[PR #4498](https://github.com/software-mansion/react-native-screens/pull/4498).
+It addresses a release-build crash reproduced immediately after pairing on
+Android 16. Recheck and remove it when upgrading to a version with the fix.
+
+### Android production setup
+
+The manual `Mobile Android (EAS)` workflow builds preview APKs or production
+AABs. It needs the existing `EXPO_TOKEN` and an Android signing key configured
+through `pnpm exec eas credentials -p android` in `apps/mobile`. Submission is
+opt-in and uploads a draft to the internal Play track; it does not release to
+the public. The first Play upload must be completed manually.
+
+Firebase is optional for builds. Place the Android Firebase config in the
+gitignored `apps/mobile/google-services.json`, or set `GOOGLE_SERVICES_JSON`
+to its absolute path. For EAS, create a file environment variable with that
+name in each build environment used (preview/production). `app.config.js`
+loads the file when present. Upload the FCM V1 service-account credential to
+EAS separately, then rebuild to test push on a device.
+
+For Play uploads, add the GitHub secret `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`.
+Local EAS Submit reads the gitignored `google-play-service-account.json` in
+`apps/mobile`. Register the **Play app-signing certificate**, not only the
+upload certificate, in `ASSETLINKS_SHA256_FINGERPRINTS` on the apex and connect
+gate. Verify real HTTPS app links after installing the Play-signed build.
+The native `bb://` scheme works without those certificates.
+
+Pending credentials do not establish push delivery or verified HTTPS app-link
+coverage. Test those separately once Firebase/signing are configured.
+
+### iOS prerequisites
+
 - Xcode 26.2 with an iOS 26 simulator runtime (`xcodebuild -downloadPlatform iOS`).
 - CocoaPods (`brew install cocoapods`), `export LANG=en_US.UTF-8`.
 - For Maestro e2e: `brew install --cask temurin@17` or `brew install openjdk@17`
@@ -206,6 +305,15 @@ as the first argument drives a dev client through Metro instead.
 
 ## CI
 
+- **Android emulator smoke** (`mobile-android-e2e.yml`) runs on PRs labeled
+  `mobile-e2e`, on manual dispatch, and nightly. It builds a debug-key-signed
+  Release APK for an Android 16 x86_64 emulator and runs the existing smoke
+  flow: direct pairing, send/provider reply, Android Back, saved connection
+  after relaunch, and native settings. It uses the isolated backend and needs
+  no Firebase, EAS, or Play credentials. The `mobile-e2e-android` artifact
+  contains screenshots, JUnit results, Maestro output, logcat, and backend logs.
+  Keyboard animation, push delivery, and bb connect are outside this basic job.
+
 - Typecheck, lint, and unit tests run on Linux in the regular `CI` workflow
   (`pnpm exec turbo run build typecheck lint` in `Checks`, the `packages`
   test shard for `vitest`), like every workspace package.
@@ -240,7 +348,13 @@ as the first argument drives a dev client through Metro instead.
   self-hosted apex; the apex defaults to `deriveConnectBaseUrl(serverUrl)`
   or `https://getbb.app` (`resolveEnrollmentTarget`). `redeemEnrollment`
   calls `redeemMachineCredential` (`POST <apex>/api/connect/redeem-machine`)
-  and saves `{mode:"connect", serverUrl, handle, credential(bbcm_…), label}`
+  with the phone’s device name (for example, `Pixel 9 Pro`). The account
+  service stores it on the machine so the dashboard shows a recognizable name.
+  The request accepts an optional `deviceName` string, trimmed and limited to
+  128 characters; older clients may omit it. Existing unnamed devices are not
+  renamed automatically. Both the account service update and a new mobile build
+  are needed for names to appear on new pairings.
+  Enrollment saves `{mode:"connect", serverUrl, handle, credential(bbcm_…), label}`
   in SecureStore, then activates it: the connector mints the desktop-session
   cookie and opens realtime (the enrolled screen shows that status live).
   Errors map to copy per wire code (`describeEnrollmentError`: invalid /
@@ -548,3 +662,21 @@ palette, run `pnpm --filter @bb/mobile theme:generate` and commit the result;
 - Maestro on iOS: `back` is not a thing; tap `id: BackButton`. The dev
   client's floating gear can sit over the header's right icons on larger
   simulators.
+
+The default-off `androidTesting` experiment adds **Android App** below the flags
+in Settings → Experiments. **Download APK** fetches and caches a checksum-verified
+APK from the public `get-bb/bb` release tagged `android-testing`. No Android tools
+are required. If no release/cache is available, **Build on this server** explicitly
+runs a local arm64 build; it requires `BB_ANDROID_SOURCE_DIR` pointing to a dedicated
+source checkout with dependencies, pnpm, Java 17+, and `ANDROID_HOME` or
+`ANDROID_SDK_ROOT`. Missing tools and build failures are reported in the page.
+
+Use `bb settings experiment androidTesting true`, then
+`bb settings android-app-prepare github --json` (or `local`) to wait for a download
+or build. `bb settings android-app --json` reads cached version/download metadata.
+SDK equivalents: `system.prepareAndroidApp({ source })`,
+`system.androidAppPreparation()`, and `system.androidApp()`.
+Downloads use `/install/bb-android.apk`; bb connect requires an account session.
+Publish the first release using **Mobile Android (EAS)** with profile `preview`
+and **publish** enabled. Local fallback APKs use the debug signing key, which may
+differ from the release key. See `docs/configuration.md` for setup and publishing.

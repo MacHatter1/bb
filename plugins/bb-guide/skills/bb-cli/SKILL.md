@@ -171,6 +171,13 @@ Keep this skill and its references focused on core BB commands. Plugin-specific
 behavior belongs in the owning plugin’s `skills/` directory, including built-in
 plugins; do not add plugin command manuals here.
 
+## Native mobile builds
+
+For Android mobile builds and distribution, see `apps/mobile/README.md`.
+`GOOGLE_SERVICES_JSON` points to the optional Firebase Android config file;
+local builds fall back to `apps/mobile/google-services.json`. EAS uses a file
+environment variable. See `bb guide customization` for push controls.
+
 ## Built-in browser control
 
 Use `bb browser instances --host <host-id> --json` to discover a desktop. Commands `tabs`, `create`, `acquire`, `connection`, `release`, `reveal`, `capture`, `close`, and `watch` require explicit `--host`, `--instance`, `--generation`, and `--thread`. See `bb guide browser` and `bb browser --help` for flags. New tabs use separate automation profiles; personal-tab control needs an explicit handoff. Revealing tabs or acquiring control opens the side panel and selects the tab only in the already focused thread, without switching threads or activating the desktop window. Connection credentials are written with `connection --output <new-file>` and work only on the browser host; keep them out of chat and public port shares. `import-sources` and `import-cookies --from <source> --profile <dir> [--into personal|automation:<id>]` combine known-browser entries (including Helium and Dia) with schema-detected Chromium/Firefox profiles matched to registered web browsers and copy a selected profile into BB; use the returned source ID, including opaque `storage-…` IDs, rather than assuming a fixed browser list; they need `--host`, `--instance`, and `--generation` only, and the source browser must be quit first.

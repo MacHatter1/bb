@@ -1,5 +1,5 @@
+import { createCoreComposerActions } from "@/lib/plugin-composer-handle";
 import { usePendingAttachmentUploads } from "./usePendingAttachmentUploads";
-import { useLeaveWithDraftHandoff } from "./useLeaveWithDraftHandoff";
 import { useInitialPromptDraft } from "./mentions/initial-prompt-draft";
 import { ProviderRequirementBanner } from "./banner/ProviderRequirementBanner";
 import { Button } from "@bb/shared-ui/button";
@@ -261,10 +261,6 @@ export interface NewThreadComposerProps {
   resetKey?: string | number | null;
   preferReadyProviderWhenUnset?: boolean;
   onSubmit: (request: NewThreadComposerSubmission) => void | Promise<void>;
-  onLeaveWithDraft?: (
-    request: NewThreadRequest,
-    draft: PromptDraftState,
-  ) => void;
   focusRequest?: number;
   children: (state: NewThreadComposerState) => ReactNode;
 }
@@ -465,7 +461,6 @@ export function NewThreadComposer({
   resetKey,
   preferReadyProviderWhenUnset = false,
   onSubmit,
-  onLeaveWithDraft,
   focusRequest,
   children,
 }: NewThreadComposerProps) {
@@ -1587,21 +1582,37 @@ export function NewThreadComposer({
     selectedThreadModel,
     submissionEnvironmentUnavailable: submissionEnvironment === null,
   });
-  const buildNewThreadRequest = useCallback(
-    (input: NewThreadRequest["input"]): NewThreadRequest | null => {
+  const submitDraft = useCallback(
+    async (
+      blockedReason: string | null,
+      submitOptions: ExperimentalComposerSubmitOptions | null,
+      pluginSubmission?: NewThreadComposerSubmission["pluginSubmission"],
+    ) => {
+      const submittedDraft = promptDraft.getCurrent();
+      const input = promptDraftToInput(submittedDraft);
       if (
+        blockedReason !== null ||
+        submitDisabledReason !== null ||
+        input.length === 0 ||
+        isSubmittingRef.current ||
         projectDefaultsUnavailable ||
         submissionEnvironment === null ||
         !selectedProviderId ||
         !selectedThreadModel
       ) {
-        return null;
+        throw new Error(
+          blockedReason ??
+            submitDisabledReason ??
+            (input.length === 0
+              ? "Type a message first."
+              : "This composer is not ready to submit yet."),
+        );
       }
       const sources: CreateExecutionInputSources = {
         ...executionInputSources,
         ...seededExecutionInputSources,
       };
-      return {
+      const request: NewThreadComposerSubmission = {
         projectId,
         providerId: selectedProviderId,
         model: selectedThreadModel,
@@ -1614,55 +1625,6 @@ export function NewThreadComposer({
         ),
         environment: submissionEnvironment,
         input,
-      };
-    },
-    [
-      executionInputSources,
-      permissionMode,
-      projectDefaultsUnavailable,
-      projectId,
-      reasoningLevel,
-      seededExecutionInputSources,
-      submissionEnvironment,
-      selectedProviderId,
-      selectedThreadModel,
-      serviceTier,
-      supportsServiceTier,
-    ],
-  );
-  useLeaveWithDraftHandoff({
-    buildRequest: buildNewThreadRequest,
-    getDraft: promptDraft.getCurrent,
-    isSubmittingRef,
-    onLeaveWithDraft,
-  });
-
-  const submitDraft = useCallback(
-    async (
-      blockedReason: string | null,
-      submitOptions: ExperimentalComposerSubmitOptions | null,
-      pluginSubmission?: NewThreadComposerSubmission["pluginSubmission"],
-    ) => {
-      const submittedDraft = promptDraft.getCurrent();
-      const input = promptDraftToInput(submittedDraft);
-      const baseRequest =
-        blockedReason !== null ||
-        submitDisabledReason !== null ||
-        input.length === 0 ||
-        isSubmittingRef.current
-          ? null
-          : buildNewThreadRequest(input);
-      if (baseRequest === null) {
-        throw new Error(
-          blockedReason ??
-            submitDisabledReason ??
-            (input.length === 0
-              ? "Type a message first."
-              : "This composer is not ready to submit yet."),
-        );
-      }
-      const request: NewThreadComposerSubmission = {
-        ...baseRequest,
         ...(submitOptions?.sendAt === undefined
           ? {}
           : { sendAt: submitOptions.sendAt }),
@@ -1687,13 +1649,21 @@ export function NewThreadComposer({
       }
     },
     [
-      buildNewThreadRequest,
       clearReuseEnvironment,
+      executionInputSources,
       onSubmit,
+      permissionMode,
+      projectDefaultsUnavailable,
+      projectId,
       promptDraft,
-      setAttachmentError,
-      setIsSubmitting,
+      reasoningLevel,
+      seededExecutionInputSources,
       submitDisabledReason,
+      submissionEnvironment,
+      selectedProviderId,
+      selectedThreadModel,
+      serviceTier,
+      supportsServiceTier,
     ],
   );
 
@@ -1880,6 +1850,12 @@ export function NewThreadComposer({
     ],
   );
 
+  const restoreHistoryDraft = useCallback(
+    (draft: PromptDraftState) =>
+      createCoreComposerActions(pluginComposerHost).restoreDraft(draft),
+    [pluginComposerHost],
+  );
+
   const renderPromptBox = useCallback(
     (options: NewThreadComposerPromptOptions) => {
       const locks = options.locks ?? {};
@@ -1904,7 +1880,7 @@ export function NewThreadComposer({
           history={{
             currentDraft,
             entries: promptHistoryDrafts,
-            onSelectEntry: promptDraft.setDraft,
+            onSelectEntry: restoreHistoryDraft,
             resetKey: projectId,
           }}
           typeahead={{
@@ -2103,6 +2079,7 @@ export function NewThreadComposer({
       promptBoxFocusRequest,
       promptDraft,
       promptHistoryDrafts,
+      restoreHistoryDraft,
       promptMentions,
       pluginComposerHost,
       providerOptions,

@@ -60,8 +60,9 @@ describe("resolveShellScreenState", () => {
     });
     expect(state).toEqual({
       kind: "error",
-      title: "This server needs pairing again",
-      detail: "credential revoked",
+      title: "Could not sign in",
+      detail:
+        "bb connect could not renew this phone’s sign-in. Pair again to reconnect.",
       action: "re-pair",
     });
   });

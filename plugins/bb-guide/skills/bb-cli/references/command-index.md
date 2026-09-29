@@ -10,6 +10,8 @@ This index lists every command path that the core CLI registers, including alias
 
 - `bb settings`
 - `bb settings show`
+- `bb settings android-app`
+- `bb settings android-app-prepare`
 - `bb settings ai-services`
 - `bb settings ai-services show`
 - `bb settings ai-services set`
@@ -187,10 +189,6 @@ move and downloads the new server's bb-app package for its service.
 - `bb thread queue delete`
 - `bb thread queue reorder`
 - `bb thread queue group`
-- `bb thread draft`
-- `bb thread draft show`
-- `bb thread draft set`
-- `bb thread draft clear`
 - `bb thread tabs`
 - `bb thread tabs show`
 - `bb thread tabs set`

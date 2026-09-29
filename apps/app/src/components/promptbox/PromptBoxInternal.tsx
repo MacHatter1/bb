@@ -83,6 +83,13 @@ import {
 } from "@bb/client-core";
 import { useRichTextEditingPreference } from "@/lib/rich-text-editing-preference";
 import {
+  clearComposerEditorBridge,
+  publishComposerEditorBridge,
+  type ComposerEditorBridge,
+  type ComposerEditorInsertValue,
+} from "@/lib/composer-editor-registry";
+import type { ComposerEditorState } from "@get-bb/plugin-sdk/internal/composer-handle";
+import {
   arePromptDraftStatesEqual,
   isPromptDraftEmpty,
   type PromptDraftAttachment,
@@ -338,7 +345,10 @@ function PromptSubmitButton({
       )}
     >
       {isBusy ? (
-        <Icon name="Loading" className="size-4 animate-spin motion-reduce:animate-none" />
+        <Icon
+          name="Loading"
+          className="size-4 animate-spin motion-reduce:animate-none"
+        />
       ) : (
         <>
           <Icon name={icon ?? "CornerDownLeft"} className="size-4" />
@@ -2665,6 +2675,104 @@ export function PromptBoxInternal({
   const canPrimarySubmit = canSubmitAction(primarySubmitAction);
   const canSubmit = hasSubmittableInput && canPrimarySubmit;
   const canModifierSubmit = canSubmitAction(modifierSubmitAction);
+  const composerEditorKey = pluginComposerHost?.textEffectKey ?? null;
+  const submittingBlockedReason = canSubmit
+    ? null
+    : isAttaching
+      ? "Uploading attachments..."
+      : (submitDisabledReason ??
+        (showVoiceActionGroup
+          ? "Finish voice input first."
+          : isSubmitting
+            ? "Submitting..."
+            : hasSubmittableInput
+              ? "This composer can't submit right now."
+              : "Type a message first."));
+  const composerEditorState = useMemo<ComposerEditorState>(
+    () => ({
+      layout: composerLayout,
+      isRunning,
+      isSubmitting,
+      isSubmittingBlocked: !canSubmit,
+      submittingBlockedReason,
+      isAttaching,
+      attachmentError,
+    }),
+    [
+      attachmentError,
+      canSubmit,
+      composerLayout,
+      isAttaching,
+      isRunning,
+      isSubmitting,
+      submittingBlockedReason,
+    ],
+  );
+  const insertAtCursorForPlugin = useCallback(
+    (value: ComposerEditorInsertValue, block: boolean) => {
+      const currentEditor = editorRef.current;
+      if (!currentEditor || currentEditor.isDestroyed) return false;
+      const insertion = currentEditor.chain();
+      if (!isPointerCoarse) insertion.focus();
+      insertion
+        .insertContent(
+          block
+            ? promptEditorContentFromValue(value, {
+                richTextMarkdown: richTextEditing,
+              })
+            : promptEditorInlineContentFromValue(value),
+        )
+        .run();
+      if (!isPointerCoarse) scheduleRevealEditorSelection();
+      return true;
+    },
+    [isPointerCoarse, richTextEditing, scheduleRevealEditorSelection],
+  );
+  const composerEditorBridge = useMemo<ComposerEditorBridge | null>(
+    () =>
+      pluginComposerHost === null
+        ? null
+        : {
+            host: pluginComposerHost,
+            pluginCustomizable: !suppressPluginComposerCustomizations,
+            state: composerEditorState,
+            insertAtCursor: insertAtCursorForPlugin,
+          },
+    [
+      composerEditorState,
+      insertAtCursorForPlugin,
+      pluginComposerHost,
+      suppressPluginComposerCustomizations,
+    ],
+  );
+  const publishedComposerEditorBridgeRef = useRef<{
+    key: string;
+    bridge: ComposerEditorBridge;
+  } | null>(null);
+  useLayoutEffect(() => {
+    const previous = publishedComposerEditorBridgeRef.current;
+    if (previous !== null && previous.key !== composerEditorKey) {
+      clearComposerEditorBridge(previous.key, previous.bridge);
+    }
+    if (composerEditorKey === null || composerEditorBridge === null) {
+      publishedComposerEditorBridgeRef.current = null;
+      return;
+    }
+    publishComposerEditorBridge(composerEditorKey, composerEditorBridge);
+    publishedComposerEditorBridgeRef.current = {
+      key: composerEditorKey,
+      bridge: composerEditorBridge,
+    };
+  }, [composerEditorBridge, composerEditorKey]);
+  useEffect(
+    () => () => {
+      const published = publishedComposerEditorBridgeRef.current;
+      if (published !== null) {
+        clearComposerEditorBridge(published.key, published.bridge);
+      }
+    },
+    [],
+  );
   const showStop = Boolean(
     isRunning && onStop && !canSubmit && !isAttaching && !showVoiceActionGroup,
   );

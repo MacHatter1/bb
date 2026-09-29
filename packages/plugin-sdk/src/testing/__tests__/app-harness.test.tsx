@@ -30,6 +30,7 @@ const {
   ThreadChat,
   useBbNavigate,
   useComposer,
+  useComposers,
   useComposerView,
   useRealtime,
   useRealtimeConnectionState,
@@ -396,6 +397,7 @@ function InlineVis({
 
 function ComposerProbe() {
   const composer = useComposer();
+  const listed = useComposers();
   const view = useComposerView();
   capturedComposerVisualSetters = {
     setTextEffect: composer.setTextEffect,
@@ -409,6 +411,9 @@ function ComposerProbe() {
         {JSON.stringify(composer.scope)}
       </span>
       <span data-testid="composer-text">{composer.text}</span>
+      <span data-testid="composer-listed">
+        {String(listed.length === 1 && listed[0] === composer)}
+      </span>
       <span data-testid="composer-view-text">{view.draft.text}</span>
       <span data-testid="composer-attachment-count">
         {view.draft.attachmentCount}
@@ -1492,6 +1497,7 @@ describe("loadPluginApp", () => {
       },
       selectedText: "answer",
       openPanel,
+      composer: null,
     });
     expect(messageActionRuns).toHaveLength(1);
     expect(messageActionRuns[0]).toMatchObject({
@@ -1820,6 +1826,7 @@ describe("renderSlot", () => {
 
     expect(thread.getByTestId("composer-scope").textContent).toBe("thread");
     expect(thread.getByTestId("composer-text").textContent).toBe("seed");
+    expect(thread.getByTestId("composer-listed").textContent).toBe("true");
     fireEvent.click(thread.getByText("replace"));
     fireEvent.click(thread.getByText("update"));
     fireEvent.click(thread.getByText("update"));
@@ -1837,27 +1844,6 @@ describe("renderSlot", () => {
     );
   });
 
-  it("exposes an explicit side-chat composer scope", () => {
-    const sideChatScope = {
-      kind: "side-chat",
-      projectId: "proj_1",
-      parentThreadId: "thr_parent",
-      tabId: "side-chat:one",
-      childThreadId: null,
-    } satisfies PluginComposerScope;
-    const slot = renderSlot(
-      app.composerCustomizations[0]!.actions![0]!,
-      {},
-      { composer: { text: "side-chat draft", scope: sideChatScope } },
-    );
-
-    expect(
-      JSON.parse(
-        slot.getByTestId("composer-scope-details").textContent ?? "{}",
-      ),
-    ).toEqual(sideChatScope);
-  });
-
   it("drives host-originated composer text and scope changes", async () => {
     const initialScope = {
       kind: "queued-message",
@@ -1865,11 +1851,8 @@ describe("renderSlot", () => {
       queuedMessageId: "qmsg_1",
     } satisfies PluginComposerScope;
     const nextScope = {
-      kind: "side-chat",
-      projectId: "proj_1",
-      parentThreadId: "thr_parent",
-      tabId: "side-chat:one",
-      childThreadId: null,
+      kind: "thread",
+      threadId: "thr_2",
     } satisfies PluginComposerScope;
     const slot = renderSlot(
       app.composerCustomizations[0]!.actions![0]!,
@@ -1986,17 +1969,15 @@ describe("renderSlot", () => {
     ]);
     newThreadSlot.unmount();
 
-    const sideChatSlot = renderSlot(
+    const queuedSlot = renderSlot(
       app.composerCustomizations[0]!.actions![0]!,
       {},
       {
         composer: {
           scope: {
-            kind: "side-chat",
-            projectId: "proj_1",
-            parentThreadId: "thr_1",
-            tabId: "tab_1",
-            childThreadId: null,
+            kind: "queued-message",
+            threadId: "thr_1",
+            queuedMessageId: "qmsg_1",
           },
         },
       },
@@ -2004,8 +1985,8 @@ describe("renderSlot", () => {
     await expect(
       capturedComposerSetSelection!({ model: "gpt-5" }),
     ).rejects.toThrow(/no pickers/);
-    expect(sideChatSlot.composer.selections).toEqual([]);
-    sideChatSlot.unmount();
+    expect(queuedSlot.composer.selections).toEqual([]);
+    queuedSlot.unmount();
   });
 
   it("invalidates visual-state setters through both unmount controls", () => {
@@ -2061,4 +2042,68 @@ describe("renderSlot", () => {
       { className: "cleanup-effect" },
     ]);
   });
+});
+
+it("reacts to attachment-only updates and atomic replacement through the public composer hook", () => {
+  const attachment = {
+    type: "localFile",
+    path: "attachments/spec.txt",
+    name: "spec.txt",
+    sizeBytes: 12,
+  } as const;
+  function DraftActionsProbe() {
+    const composer = useComposer();
+    return (
+      <>
+        <output>
+          {composer.text}:{composer.attachmentCount}:{String(composer.isEmpty)}
+        </output>
+        <button
+          onClick={() =>
+            composer.replace((current) => ({
+              ...current,
+              attachments: current.attachments.some(
+                (item) => item.path === attachment.path,
+              )
+                ? current.attachments
+                : [...current.attachments, attachment],
+            }))
+          }
+        >
+          Attach file
+        </button>
+        <button
+          onClick={() =>
+            composer.replace({
+              text: "prefill",
+              mentions: [],
+            })
+          }
+        >
+          Prefill
+        </button>
+        <button
+          onClick={() =>
+            composer.replace({
+              text: "",
+              mentions: [],
+              attachments: [],
+            })
+          }
+        >
+          Replace all
+        </button>
+      </>
+    );
+  }
+  const slot = renderSlot({ component: DraftActionsProbe }, {});
+  expect(slot.getByRole("status").textContent).toBe(":0:true");
+  fireEvent.click(slot.getByRole("button", { name: "Attach file" }));
+  expect(slot.getByRole("status").textContent).toBe(":1:false");
+  fireEvent.click(slot.getByRole("button", { name: "Attach file" }));
+  expect(slot.getByRole("status").textContent).toBe(":1:false");
+  fireEvent.click(slot.getByRole("button", { name: "Prefill" }));
+  expect(slot.getByRole("status").textContent).toBe("prefill:1:false");
+  fireEvent.click(slot.getByRole("button", { name: "Replace all" }));
+  expect(slot.getByRole("status").textContent).toBe(":0:true");
 });

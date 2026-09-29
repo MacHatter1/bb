@@ -65,7 +65,9 @@ added or enabled accounts are available without a plugin reload. With an
 enabled account whose secret file remains readable and valid, the plugin
 contributes its provider-specific server route and a distinct secret token to
 Claude Code or Codex sessions on every host. Claude Code also receives
-`ENABLE_TOOL_SEARCH=true` so tool search stays on through the hub. Codex
+`ENABLE_TOOL_SEARCH=true` so tool search stays on through the hub, and
+`_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1` so Opus keeps its native 1M
+context window instead of the 200k fallback for custom base URLs. Codex
 receives `CODEX_OPENAI_BASE_URL` and the secret `CODEX_POOL_AUTH_TOKEN`; its
 app server uses those values without editing `~/.codex/config.toml`.
 Codex image generation and editing use the same authenticated pool route.
@@ -699,12 +701,15 @@ useBbNavigate (including openUrl(url), which applies the current
 client's in-app/external-browser preference, plus
 experimental_openFilePreview({ target, location }) and
 experimental_openFileExternally({ target, location }) for explicit live
-workspace/host/thread-storage files), useComposer
-(read/replace/update/clear scoped composer text,
-apply a class-based text effect, lock input, quote selections, insert mention
-pills, and focus the composer), and useComposerView (reactive bound scope,
-layout, draft, and run state). Plain-text edits preserve attachments and
-reconcile only inline mentions overlapped by the edit. Define RPC methods with `defineRpcContract`
+workspace/host/thread-storage files), and useComposer (one stable handle for
+the bound composer: read its text, mentions, scope, layout, run and submit
+state, and why submitting is blocked; replace/update/clear text; insert text
+and mentions at the cursor or end; apply a class-based text effect, lock input,
+quote selections, submit exactly as Enter would, and focus the composer),
+and useComposers (a handle for every composer on screen, so a panel can write
+into the one the user picks).
+Plain-text edits preserve attachments and reconcile only inline mentions
+overlapped by the edit. Define RPC methods with `defineRpcContract`
 and Standard Schema-compatible input/output validators (Zod works directly),
 register via `bb.rpc.register(contract, handlers)`, then use a type-only
 backend contract import with `useRpc<typeof contract>()` for exact frontend
@@ -911,10 +916,9 @@ reload/disable/shutdown).
 Frontend entries register React slots (homepageSection, settingsSection,
 navPanel, threadPanelAction, experimental_newThreadPanelAction, fileOpener,
 messageDirective) and composer
-customizations via `app.composer.customize({ actions, plusMenu, banners,
-richText })`; action/banner components use `useComposer()` and
-`useComposerView()`, while the host renders plus-menu rows and editor
-decorations. The deprecated pre-1.0 `slots.composerAccessory` footer API was
+customizations via `app.composer.customize({ actions, plusMenu, sendMenu,
+banners, richText })`; action/banner components use `useComposer()`, while the
+host renders plus-menu and send-menu rows and editor decorations. The deprecated pre-1.0 `slots.composerAccessory` footer API was
 removed; migrate controls to actions or the plus menu and larger content to
 banners. Register all frontend surfaces via
 definePluginApp, use the hooks

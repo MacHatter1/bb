@@ -352,6 +352,9 @@ type ExpectedStatusKey = "get";
 
 type ExpectedSystemKey =
   | "acknowledgeAppUpdate"
+  | "androidApp"
+  | "androidAppPreparation"
+  | "prepareAndroidApp"
   | "appUpdate"
   | "applyAppUpdate"
   | "setMachineEnvironmentVariable"
@@ -430,7 +433,6 @@ type ExpectedThreadsKey =
   | "unarchive"
   | "unpin"
   | "update"
-  | "updateDraft"
   | "wait";
 
 type ExpectedThreadEventsKey = "list" | "wait";

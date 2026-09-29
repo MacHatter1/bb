@@ -783,6 +783,7 @@ export async function lookupMachineCodeForServerCredential(
 export async function redeemMachineCode(
   deps: Pick<Deps, "db" | "serverUrlTemplate">,
   code: string,
+  deviceName: string | null,
 ): Promise<
   | {
       credential: string;
@@ -820,6 +821,7 @@ export async function redeemMachineCode(
     .insert(machine)
     .values({
       id: machineId,
+      name: deviceName,
       userId: row.userId,
       credentialHash: await sha256Hex(credential),
       createdAt: new Date(),

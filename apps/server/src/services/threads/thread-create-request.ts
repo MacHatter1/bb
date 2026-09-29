@@ -23,11 +23,10 @@ export interface ThreadCreateServiceRequestInput {
    */
   sendAt?: CreateThreadRequest["sendAt"];
   input: PromptInput[];
-  /** `true` ⇒ `input` is saved as the thread's draft instead of dispatched. */
-  draft?: CreateThreadRequest["draft"];
   pluginMetadata?: CreateThreadRequest["pluginMetadata"];
   pluginSubmission?: CreateThreadRequest["pluginSubmission"];
   sectionId?: CreateThreadRequest["sectionId"];
+  pinned?: CreateThreadRequest["pinned"];
   model?: CreateThreadRequest["model"];
   origin: ThreadCreateOrigin | null;
   originPluginId?: CreateThreadRequest["originPluginId"];
