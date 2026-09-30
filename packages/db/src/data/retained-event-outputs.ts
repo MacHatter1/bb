@@ -299,25 +299,6 @@ function removeOutputTruncation(
   }
 }
 
-function hasLiveRetainedEventOutputs(
-  db: DbQueryConnection,
-  eventIds: readonly string[],
-  now: number,
-): boolean {
-  const hit = db
-    .select({ eventId: retainedEventOutputs.eventId })
-    .from(retainedEventOutputs)
-    .where(
-      and(
-        inArray(retainedEventOutputs.eventId, [...eventIds]),
-        gt(retainedEventOutputs.expiresAt, now),
-      ),
-    )
-    .limit(1)
-    .get();
-  return hit !== undefined;
-}
-
 export function hydrateRetainedEventOutputRows<
   TRow extends HydratableStoredEventRow,
 >(
@@ -329,12 +310,6 @@ export function hydrateRetainedEventOutputRows<
     return [];
   }
   const eventIds = [...new Set(rows.map((row) => row.id))];
-  if (
-    eventIds.length <= RETAINED_EVENT_OUTPUT_LOOKUP_BATCH_SIZE &&
-    !hasLiveRetainedEventOutputs(db, eventIds, now)
-  ) {
-    return [...rows];
-  }
   const outputs: RetainedEventOutputHydrationRow[] = [];
   for (
     let start = 0;
@@ -465,20 +440,6 @@ export function canHydrateRetainedEventOutputRowsWithinDataByteLimit<
   if (rows.length === 0) {
     return true;
   }
-  const rowCountsByEventId = new Map<string, number>();
-  for (const row of rows) {
-    rowCountsByEventId.set(row.id, (rowCountsByEventId.get(row.id) ?? 0) + 1);
-  }
-  const eventIds = [...rowCountsByEventId.keys()];
-  if (
-    eventIds.length <= RETAINED_EVENT_OUTPUT_LOOKUP_BATCH_SIZE &&
-    !hasLiveRetainedEventOutputs(db, eventIds, now)
-  ) {
-    return (
-      rows.reduce((total, row) => total + Buffer.byteLength(row.data), 0) <=
-      maxDataBytes
-    );
-  }
   const storedDataBytes = rows.reduce(
     (total, row) => total + Buffer.byteLength(row.data),
     0,
@@ -486,6 +447,11 @@ export function canHydrateRetainedEventOutputRowsWithinDataByteLimit<
   if (storedDataBytes > maxDataBytes) {
     return false;
   }
+  const rowCountsByEventId = new Map<string, number>();
+  for (const row of rows) {
+    rowCountsByEventId.set(row.id, (rowCountsByEventId.get(row.id) ?? 0) + 1);
+  }
+  const eventIds = [...rowCountsByEventId.keys()];
   const sizes = listRetainedEventOutputSizes(db, eventIds, now);
   if (sizes.length === 0) {
     return true;
