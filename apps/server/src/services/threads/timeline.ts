@@ -51,7 +51,7 @@ import {
   isTimelineCursorSequencePresent,
   listStoredConversationOutlineEventRows,
   listStoredClientTurnRequestIdsInRange,
-  listStoredEventRowsSingleQuery,
+  listStoredEventRows,
   listTimelineInterruptionRows,
   listStoredClientTurnRequestRowsByKeys,
   listStoredEventRowsByParentToolCallIds,
@@ -1050,7 +1050,7 @@ function selectStandardTimelineEventRows(
     profile,
     "group-context-query",
     () =>
-      listStoredEventRowsSingleQuery(db, {
+      listStoredEventRows(db, {
         threadId: thread.id,
         afterSequence: contextStart - 1,
         beforeSequence: contextEnd + 1,

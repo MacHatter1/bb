@@ -10,6 +10,7 @@ import {
   threadScope,
   turnScope,
   type PromptInput,
+  type ThreadEventType,
 } from "@bb/domain";
 import { noopNotifier } from "../../src/notifier.js";
 import type { DbNotifier } from "../../src/notifier.js";
@@ -60,6 +61,7 @@ import {
   pruneResolvedItemDeltas,
   listLatestOpenBackgroundTaskStateRowsForThread,
 } from "../../src/data/events.js";
+import type { ListStoredEventRowsArgs } from "../../src/data/events.js";
 import { createEnvironment } from "../../src/data/environments.js";
 import { createProject } from "../../src/data/projects.js";
 import {
@@ -1318,6 +1320,53 @@ describe("events", () => {
       sequence: 2,
       type: "system/error",
     });
+  });
+
+  it("returns the same type-filtered rows with and without a limit", () => {
+    const { db, thread } = setup();
+    const types = [
+      "turn/started",
+      "turn/completed",
+      "system/error",
+    ] as const satisfies readonly ThreadEventType[];
+    const rotation = [...types, "thread/compacted"] as const;
+    insertEvents(
+      db,
+      noopNotifier,
+      Array.from({ length: 24 }, (_, index) => ({
+        threadId: thread.id,
+        sequence: index + 1,
+        type: rotation[index % rotation.length],
+        ...threadEventFields,
+        data: "{}",
+      })),
+    );
+
+    expect(
+      listStoredEventRows(db, {
+        threadId: thread.id,
+        types: [...types],
+      }).map((row) => row.sequence),
+    ).toEqual(
+      Array.from({ length: 24 }, (_, index) => index + 1).filter(
+        (sequence) => sequence % rotation.length !== 0,
+      ),
+    );
+    for (const args of [
+      { threadId: thread.id, types: [...types, ...types], order: "desc" },
+      {
+        threadId: thread.id,
+        types: [...types],
+        afterSequence: 3,
+        beforeSequence: 20,
+      },
+    ] satisfies ListStoredEventRowsArgs[]) {
+      const unlimited = listStoredEventRows(db, args);
+      expect(unlimited.length).toBeGreaterThan(0);
+      expect(listStoredEventRows(db, { ...args, limit: 100 })).toEqual(
+        unlimited,
+      );
+    }
   });
 
   it("finds the latest output event row without scanning unrelated event types", () => {
