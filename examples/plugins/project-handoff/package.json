@@ -6,7 +6,7 @@
   "description": "Export a project handoff brief with its sources and active threads.",
   "engines": {
     "bb": ">=0.0",
-    "bbPluginSdk": ">=0.6.39"
+    "bbPluginSdk": ">=0.6.40"
   },
   "bb": {
     "name": "Project handoff",
