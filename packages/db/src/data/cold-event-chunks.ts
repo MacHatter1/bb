@@ -451,7 +451,6 @@ function rowToRecord(row: EventSelectRow): ColdEventRecord {
 function listEligibleEvents(
   db: DbConnection,
   threadId: string,
-  now: number,
   budget: { bytes: number; rows: number },
 ): ColdEventRecord[] {
   let cursors = eventScanCursors.get(db);
@@ -462,7 +461,7 @@ function listEligibleEvents(
   const cursor = cursors.get(threadId) ?? 0;
   const candidates = db.$client
     .prepare<
-      [string, number, number, number],
+      [string, number, number],
       { id: string; sequence: number; bytes: number }
     >(
       `SELECT candidate.id, candidate.sequence, bb_text_bytes(candidate.data) AS bytes
@@ -476,11 +475,11 @@ function listEligibleEvents(
          )
          AND NOT EXISTS (
            SELECT 1 FROM retained_event_outputs
-           WHERE event_id = candidate.id AND expires_at > ?
+           WHERE event_id = candidate.id
          )
        ORDER BY sequence ASC LIMIT ?`,
     )
-    .all(threadId, cursor, now, budget.rows + 1);
+    .all(threadId, cursor, budget.rows + 1);
   const statement = db.$client.prepare<[string], EventSelectRow>(
     `SELECT
        id, thread_id, environment_id, scope_kind, turn_id, provider_thread_id,
@@ -744,7 +743,7 @@ export function compressColdThreadEvents(
   for (const threadId of listCandidateThreadIds(db, args, scanLimit)) {
     if (budget.bytes === 0 || budget.rows === 0) break;
     if (args.threadId === undefined) scanCursors.set(db, threadId);
-    const eligible = listEligibleEvents(db, threadId, args.now, budget);
+    const eligible = listEligibleEvents(db, threadId, budget);
     if (eligible.length === 0) continue;
     const drafts = buildDrafts(eligible, encode);
     if (drafts.length === 0) continue;

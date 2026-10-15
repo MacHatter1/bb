@@ -241,95 +241,105 @@ describe("cold event compression", () => {
     expect(result.after.walBytesPerTurn).toBeNull();
   });
 
-  it("skips young, active, excluded, and retained events", () => {
-    const now = Date.now();
-    const { db, project } = setup();
-    const body = "a".repeat(4096);
-    const active = createIdleThread(
-      db,
-      project.id,
-      now,
-      "active",
-      now - 8 * DAY_MS,
-    );
-    insertAgentMessages(db, active.id, 5, body);
-    const pending = createIdleThread(
-      db,
-      project.id,
-      now,
-      "pending",
-      now - 8 * DAY_MS,
-    );
-    insertAgentMessages(db, pending.id, 5, body);
-    const young = createIdleThread(db, project.id, now, "idle", now);
-    insertAgentMessages(db, young.id, 5, body);
+  it.each([DAY_MS, -DAY_MS])(
+    "skips young, active, excluded, and retained events at expiry offset %i",
+    (expiryOffset) => {
+      const now = Date.now();
+      const { db, project } = setup();
+      const body = "a".repeat(4096);
+      const active = createIdleThread(
+        db,
+        project.id,
+        now,
+        "active",
+        now - 8 * DAY_MS,
+      );
+      insertAgentMessages(db, active.id, 5, body);
+      const pending = createIdleThread(
+        db,
+        project.id,
+        now,
+        "pending",
+        now - 8 * DAY_MS,
+      );
+      insertAgentMessages(db, pending.id, 5, body);
+      const young = createIdleThread(db, project.id, now, "idle", now);
+      insertAgentMessages(db, young.id, 5, body);
 
-    const idle = createIdleThread(db, project.id, now);
-    insertAgentMessages(db, idle.id, 4, body);
-    db.$client
-      .prepare(
-        `INSERT INTO events (
+      const idle = createIdleThread(db, project.id, now);
+      insertAgentMessages(db, idle.id, 4, body);
+      db.$client
+        .prepare(
+          `INSERT INTO events (
           id, thread_id, scope_kind, sequence, type, data, created_at
         ) VALUES (?, ?, 'thread', ?, 'provider/rateLimits/updated', '{}', ?)`,
-      )
-      .run(`evt_${idle.id}_rate`, idle.id, 5, now);
-    db.$client
-      .prepare(
-        `INSERT INTO events (
+        )
+        .run(`evt_${idle.id}_rate`, idle.id, 5, now);
+      db.$client
+        .prepare(
+          `INSERT INTO events (
           id, thread_id, scope_kind, sequence, type, item_kind, data, created_at
         ) VALUES (?, ?, 'thread', ?, 'item/completed', 'commandExecution', ?, ?)`,
-      )
-      .run(
-        `evt_${idle.id}_retained`,
-        idle.id,
-        6,
-        JSON.stringify({
-          item: { aggregatedOutput: "full", type: "commandExecution" },
-        }),
-        now,
-      );
-    db.$client
-      .prepare(
-        `INSERT INTO events (
+        )
+        .run(
+          `evt_${idle.id}_retained`,
+          idle.id,
+          6,
+          JSON.stringify({
+            item: { aggregatedOutput: "full", type: "commandExecution" },
+          }),
+          now,
+        );
+      db.$client
+        .prepare(
+          `INSERT INTO events (
           id, thread_id, scope_kind, sequence, type, item_kind, data, created_at
         ) VALUES (?, ?, 'thread', ?, 'item/completed', 'commandExecution', '{}', ?)`,
-      )
-      .run(`evt_${idle.id}_retained_tail`, idle.id, 7, now);
-    db.$client
-      .prepare(
-        `INSERT INTO retained_event_outputs (event_id, output_path, value, expires_at)
-         VALUES (?, 'aggregatedOutput', 'full', ?)`,
-      )
-      .run(`evt_${idle.id}_retained`, now + DAY_MS);
-
-    for (const thread of [active, pending, young]) {
-      const skipped = compressColdThreadEvents(db, {
-        now,
-        threadId: thread.id,
-      });
-      expect(skipped.eventsCompressed).toBe(0);
-      expect(eventCount(db, thread.id)).toBe(5);
-      expect(chunkCount(db, thread.id)).toBe(0);
-    }
-
-    const result = compressColdThreadEvents(db, { now, threadId: idle.id });
-    expect(result.eventsCompressed).toBe(4);
-    expect(eventCount(db, idle.id, "provider/rateLimits/updated")).toBe(1);
-    expect(eventCount(db, idle.id, "item/completed")).toBe(2);
-    const inlineIds = new Set(
-      db.$client
-        .prepare<[string], { id: string }>(
-          `SELECT id FROM events WHERE thread_id = ?`,
         )
-        .all(idle.id)
-        .map((row) => row.id),
-    );
-    expect(inlineIds.has(`evt_${idle.id}_retained`)).toBe(true);
-    expect(inlineIds.has(`evt_${idle.id}_retained_tail`)).toBe(true);
-    expect(inlineIds.has(`evt_${idle.id}_rate`)).toBe(true);
-    expect(inlineIds.has(`evt_${idle.id}_1`)).toBe(false);
-    expect(listEvents(db, { threadId: idle.id })).toHaveLength(7);
-  });
+        .run(`evt_${idle.id}_retained_tail`, idle.id, 7, now);
+      db.$client
+        .prepare(
+          `INSERT INTO retained_event_outputs (event_id, output_path, value, expires_at)
+         VALUES (?, 'aggregatedOutput', 'full', ?)`,
+        )
+        .run(`evt_${idle.id}_retained`, now + expiryOffset);
+
+      for (const thread of [active, pending, young]) {
+        const skipped = compressColdThreadEvents(db, {
+          now,
+          threadId: thread.id,
+        });
+        expect(skipped.eventsCompressed).toBe(0);
+        expect(eventCount(db, thread.id)).toBe(5);
+        expect(chunkCount(db, thread.id)).toBe(0);
+      }
+
+      const result = compressColdThreadEvents(db, { now, threadId: idle.id });
+      expect(result.eventsCompressed).toBe(4);
+      expect(eventCount(db, idle.id, "provider/rateLimits/updated")).toBe(1);
+      expect(eventCount(db, idle.id, "item/completed")).toBe(2);
+      const inlineIds = new Set(
+        db.$client
+          .prepare<[string], { id: string }>(
+            `SELECT id FROM events WHERE thread_id = ?`,
+          )
+          .all(idle.id)
+          .map((row) => row.id),
+      );
+      expect(inlineIds.has(`evt_${idle.id}_retained`)).toBe(true);
+      expect(
+        db.$client
+          .prepare(
+            "SELECT value, expires_at FROM retained_event_outputs WHERE event_id = ?",
+          )
+          .get(`evt_${idle.id}_retained`),
+      ).toEqual({ value: "full", expires_at: now + expiryOffset });
+      expect(inlineIds.has(`evt_${idle.id}_retained_tail`)).toBe(true);
+      expect(inlineIds.has(`evt_${idle.id}_rate`)).toBe(true);
+      expect(inlineIds.has(`evt_${idle.id}_1`)).toBe(false);
+      expect(listEvents(db, { threadId: idle.id })).toHaveLength(7);
+    },
+  );
 
   it("stays off until the setting is enabled", () => {
     const now = Date.now();
